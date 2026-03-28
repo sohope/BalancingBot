@@ -13,5 +13,7 @@
 
 void ap_init();
 void ap_exe();
+void ap_timer_10ms_callback();
+
 
 #endif /* APP_AP_MAIN_H_ */
