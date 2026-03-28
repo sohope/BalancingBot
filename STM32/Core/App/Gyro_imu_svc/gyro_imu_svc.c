@@ -43,12 +43,12 @@ void GyroImuSvc_Execute(void)
 	MPU6050_RawData_t raw;
 	if (MPU6050_ReadRaw(&raw) != MPU6050_OK) return;
 
-	float ax = raw.accel_x / ACCEL_SCALE;
-	float ay = raw.accel_y / ACCEL_SCALE;
-	float az = raw.accel_z / ACCEL_SCALE;
-	float gx = raw.gyro_x  / GYRO_SCALE;
-	float gy = raw.gyro_y  / GYRO_SCALE;
-	float gz = raw.gyro_z  / GYRO_SCALE;
+	int32_t ax_100 = (int32_t)raw.accel_x * 100 / (int32_t)16384;
+	int32_t ay_100 = (int32_t)raw.accel_y * 100 / (int32_t)16384;
+	int32_t az_100 = (int32_t)raw.accel_z * 100 / (int32_t)16384;
+	int32_t gx_10  = (int32_t)raw.gyro_x  * 10  / (int32_t)131;
+	int32_t gy_10  = (int32_t)raw.gyro_y  * 10  / (int32_t)131;
+	int32_t gz_10  = (int32_t)raw.gyro_z  * 10  / (int32_t)131;
 
 	static uint32_t lastPrint = 0;
 	if ((now - lastPrint) >= PRINT_INTERVAL_MS) {
@@ -56,12 +56,12 @@ void GyroImuSvc_Execute(void)
 
 		char buf[120];
 		sprintf(buf, "AX:%d.%02d AY:%d.%02d AZ:%d.%02d GX:%d.%d GY:%d.%d GZ:%d.%d\r\n",
-				(int)ax, abs((int)(ax * 100) % 100),
-				(int)ay, abs((int)(ay * 100) % 100),
-				(int)az, abs((int)(az * 100) % 100),
-				(int)gx, abs((int)(gx * 10) % 10),
-				(int)gy, abs((int)(gy * 10) % 10),
-				(int)gz, abs((int)(gz * 10) % 10));
+				(int)(ax_100 / 100), abs((int)(ax_100 % 100)),
+				(int)(ay_100 / 100), abs((int)(ay_100 % 100)),
+				(int)(az_100 / 100), abs((int)(az_100 % 100)),
+				(int)(gx_10 / 10), abs((int)(gx_10 % 10)),
+				(int)(gy_10 / 10), abs((int)(gy_10 % 10)),
+				(int)(gz_10 / 10), abs((int)(gz_10 % 10)));
 		print_uart(buf);
 	}
 }
