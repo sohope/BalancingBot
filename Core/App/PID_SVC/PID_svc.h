@@ -1,10 +1,3 @@
-/*
- * PID.h
- *
- *  Created on: Mar 28, 2026
- *      Author: kccistc
- */
-
 #ifndef APP_PID_H_
 #define APP_PID_H_
 
