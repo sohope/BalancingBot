@@ -1,0 +1,61 @@
+# STM32 CubeIDE / HAL
+
+# Build Directories
+build/
+Debug/
+Release/
+
+# Build Output Files
+*.o
+*.d
+*.elf
+*.map
+*.bin
+*.hex
+*.list
+
+# CubeIDE Project Settings
+.settings/
+.metadata/
+*.launch
+
+# STM32CubeIDE Temporary Files
+*.log
+*.tmp
+*.bak
+
+# STM32CubeMX Files
+*.ioc.backup
+*.mxproject
+
+# User Specific Files
+*.user
+*.user.*
+*.swp
+*.swo
+*~
+
+# Debug Files
+*.gdb
+*.stlink
+
+# CMSIS / HAL Generated Cache
+*.cache
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# IDE History
+.history/
+
+# Backup Files
+*.backup.*
+*.old
+
+# Temporary Files
+*.temp
+
+# # CubeIDE Workspace Files
+# .cproject
+# .project
