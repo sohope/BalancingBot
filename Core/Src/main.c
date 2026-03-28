@@ -18,10 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdlib.h>
+#include "PID.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,7 +48,12 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
+uint8_t rx_data;
+char rx_buffer[20];
+uint8_t rx_index = 0;
+uint8_t rx_flag = 0;
 
+extern PID_Controller bal_pid;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -101,7 +106,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+HAL_UART_Receive_IT(&huart2, &rx_data,1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -111,6 +116,25 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(rx_flag == 1)
+	  {
+		  float new_value = atof(&rx_buffer[2]);
+		  switch(rx_buffer[0])
+		  {
+			  case 'P' :
+				  bal_pid.pid_kp = new_value;
+				  break;
+			  case 'I' :
+				  bal_pid.pid_ki = new_value;
+				  bal_pid.i_integral = 0.0f;
+				  break;
+			  case 'D' :
+				  bal_pid.pid_kd = new_value;
+				  break;
+		  }
+		  rx_index = 0;
+		  rx_flag = 0;
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -317,7 +341,26 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART2)
+	{
+		if(rx_data == '\n')
+		{
+			rx_buffer[rx_index] = '\0'; //문장 끝 표시
+			rx_flag = 1;
+		}
+		else
+		{
+			if(rx_index < 19)
+			{
+				rx_buffer[rx_index++] = rx_data;
+			}
+		}
+		//다음 글자를 받기 위해 다시 인터럽트 활성화
+		HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+	}
+}
 /* USER CODE END 4 */
 
 /**

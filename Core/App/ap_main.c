@@ -38,6 +38,26 @@ Move_Synthesizer move_sync;
  extern float Driver_Get_Rate(void);
  extern void Driver_Set_Motor(float left_pwm, float right_pwm);
 
+
+ void ap_timer_10ms_callback()
+ {
+ 	bal_pid.current_angle = Driver_Get_Angle();
+ 	bal_pid.current_rate= Driver_Get_Rate();
+
+ 	PID_Compute(&bal_pid);
+
+ 	move_sync.balance_output = bal_pid.balance_output;
+ 	Move_Compute(&move_sync);
+
+ 	if(move_sync.left_cmd > 100.0f) move_sync.left_cmd = 100.0f;
+ 	else if(move_sync.left_cmd< -100.0f) move_sync.left_cmd = -100.0f;
+
+ 	if(move_sync.right_cmd > 100.0f) move_sync.right_cmd = 100.0f;
+ 	else if(move_sync.right_cmd< -100.0f) move_sync.right_cmd = -100.0f;
+
+ 	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
+ }
+
  void Move_Compute(Move_Synthesizer *sync)
  {
 	 sync->move_output = 0.0f;
@@ -63,26 +83,6 @@ Move_Synthesizer move_sync;
 	 sync->left_cmd = sync->balance_output + sync->move_output + sync->turn_output;
 	 sync->right_cmd = sync->balance_output + sync->move_output - sync->turn_output;
  }
-
- void ap_timer_10ms_callback()
- {
- 	bal_pid.current_angle = Driver_Get_Angle();
- 	bal_pid.current_rate= Driver_Get_Rate();
-
- 	PID_Compute(&bal_pid);
-
- 	move_sync.balance_output = bal_pid.balance_output;
- 	Move_Compute(&move_sync);
-
- 	if(move_sync.left_cmd > 100.0f) move_sync.left_cmd = 100.0f;
- 	else if(move_sync.left_cmd< -100.0f) move_sync.left_cmd = -100.0f;
-
- 	if(move_sync.right_cmd > 100.0f) move_sync.right_cmd = 100.0f;
- 	else if(move_sync.right_cmd< -100.0f) move_sync.right_cmd = -100.0f;
-
- 	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
- }
-
 
 void ap_init()
 {
