@@ -458,10 +458,7 @@ class BalancingBotGUI(QMainWindow):
         self.tabs.addTab(self.debug_tab, "DEBUG")
 
         self._build_demo_tab()
-
-        # 디버깅탭: placeholder
-        debug_layout = QVBoxLayout(self.debug_tab)
-        debug_layout.addWidget(QLabel("Debug tab - coming soon"))
+        self._build_debug_tab()
 
         ml.addWidget(self.tabs)
 
@@ -572,6 +569,114 @@ class BalancingBotGUI(QMainWindow):
 
         dl.addLayout(cl, stretch=1)
 
+    # ==========================================
+    # 디버깅탭 구성
+    # ==========================================
+    def _build_debug_tab(self):
+        dl = QVBoxLayout(self.debug_tab)
+        dl.setContentsMargins(15, 15, 15, 15)
+        dl.setSpacing(10)
+
+        def make_plot(title, ylabel, color):
+            w = pg.PlotWidget()
+            w.setTitle(title, color="#333333", size="10pt", bold=True)
+            w.setYRange(-50, 50)
+            w.showGrid(x=True, y=True, alpha=0.15)
+            for an in ['left', 'bottom']:
+                ax = w.getAxis(an)
+                ax.setPen(pg.mkPen(color='#CCCCCC', width=1))
+                ax.setTextPen(pg.mkPen(color='#666666'))
+            w.getAxis('left').setLabel(ylabel, color='#666666')
+            w.addItem(pg.InfiniteLine(angle=0, movable=False,
+                pen=pg.mkPen(color='#EF4444', width=1, style=Qt.DashLine)))
+            data = [0] * 200
+            line = w.plot(list(range(200)), data,
+                pen=pg.mkPen(color=color, width=2), antialias=True)
+            return w, data, line
+
+        # 그래프 3개
+        graphs_layout = QHBoxLayout()
+
+        self.dbg_angle_widget, self.dbg_angle_data, self.dbg_angle_line = \
+            make_plot("Angle", "deg", "#ff922b")
+        self.dbg_pid_widget, self.dbg_pid_data, self.dbg_pid_line = \
+            make_plot("PID Output", "%", "#f06595")
+        self.dbg_rate_widget, self.dbg_rate_data, self.dbg_rate_line = \
+            make_plot("Gyro Rate", "deg/s", "#ffd43b")
+
+        graphs_layout.addWidget(self.dbg_angle_widget)
+        graphs_layout.addWidget(self.dbg_pid_widget)
+        graphs_layout.addWidget(self.dbg_rate_widget)
+        dl.addLayout(graphs_layout, stretch=3)
+
+        # PID 게인 튜닝 패널
+        pid_group = QGroupBox("PID GAIN TUNING")
+        pid_layout = QHBoxLayout(pid_group)
+        pid_layout.setSpacing(30)
+
+        ss = """
+            QDoubleSpinBox {
+                background-color: #1a1b26; color: #c0caf5; border: 2px solid #414868;
+                border-radius: 6px; padding: 8px; font-size: 16px; font-weight: bold;
+            }
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+                width: 20px; border: 1px solid #414868;
+            }
+        """
+
+        def make_pid_control(label, color, initial):
+            vl = QVBoxLayout()
+            lbl = QLabel(label)
+            lbl.setStyleSheet(f"font-size:18px;font-weight:900;color:{color};")
+            lbl.setAlignment(Qt.AlignCenter)
+            spin = QDoubleSpinBox()
+            spin.setStyleSheet(ss)
+            spin.setRange(0.0, 99.99)
+            spin.setSingleStep(0.1)
+            spin.setDecimals(2)
+            spin.setValue(initial)
+            spin.setMinimumWidth(120)
+            vl.addWidget(lbl)
+            vl.addWidget(spin)
+            return vl, spin
+
+        vl_p, self.spin_p = make_pid_control("Kp", "#7dcfff", 15.0)
+        vl_i, self.spin_i = make_pid_control("Ki", "#9ece6a", 1.0)
+        vl_d, self.spin_d = make_pid_control("Kd", "#e0af68", 0.5)
+
+        pid_layout.addLayout(vl_p)
+        pid_layout.addLayout(vl_i)
+        pid_layout.addLayout(vl_d)
+
+        # 전송 버튼
+        btn_send = QPushButton("SEND")
+        btn_send.setStyleSheet("""
+            QPushButton {
+                background-color: #7aa2f7; color: #1a1b26; font-weight: 900;
+                font-size: 16px; padding: 15px 40px; border-radius: 8px;
+            }
+            QPushButton:pressed { background-color: #5a82d7; }
+        """)
+        btn_send.clicked.connect(self._send_pid_gains)
+        pid_layout.addWidget(btn_send, alignment=Qt.AlignBottom)
+
+        # 현재 값 표시
+        self.pid_current_label = QLabel("Current: P=15.00  I=1.00  D=0.50")
+        self.pid_current_label.setStyleSheet("font-size:13px;color:#6b7280;")
+        self.pid_current_label.setAlignment(Qt.AlignCenter)
+
+        dl.addWidget(pid_group, stretch=1)
+        dl.addWidget(self.pid_current_label)
+
+    def _send_pid_gains(self):
+        p = self.spin_p.value()
+        i = self.spin_i.value()
+        d = self.spin_d.value()
+        self.ser.send_set_pid('P', p)
+        self.ser.send_set_pid('I', i)
+        self.ser.send_set_pid('D', d)
+        self.pid_current_label.setText(f"Sent: P={p:.2f}  I={i:.2f}  D={d:.2f}")
+
     def _set_move(self, fwd, turn):
         if fwd is not None:
             self.cmd_fwd = fwd
@@ -639,6 +744,14 @@ class BalancingBotGUI(QMainWindow):
         # 모터 바
         self.bar_left.setValue(t.left_cmd)
         self.bar_right.setValue(t.right_cmd)
+
+        # 디버깅탭 그래프
+        self.dbg_angle_data = self.dbg_angle_data[1:] + [t.angle]
+        self.dbg_angle_line.setData(list(range(200)), self.dbg_angle_data)
+        self.dbg_pid_data = self.dbg_pid_data[1:] + [t.pid_output]
+        self.dbg_pid_line.setData(list(range(200)), self.dbg_pid_data)
+        self.dbg_rate_data = self.dbg_rate_data[1:] + [t.gyro_rate]
+        self.dbg_rate_line.setData(list(range(200)), self.dbg_rate_data)
 
         # 헤더 상태
         if self.ser.is_connected:
