@@ -120,7 +120,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  ap_exe();
+//	  ap_exe();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -414,7 +414,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	{
 		if(rx_data == '\n')
 		{
-			rx_buffer[rx_index] = '\0'; //ë¬¸ì¥ ? ?‘œ?‹œ
+			rx_buffer[rx_index] = '\0'; //ë¬¸ì¥ ?ï¿½ï¿½ ?ï¿½ï¿½?ï¿½ï¿½
 			rx_flag = 1;
 		}
 		else
@@ -424,7 +424,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				rx_buffer[rx_index++] = rx_data;
 			}
 		}
-		//?‹¤?Œ ê¸??ë¥? ë°›ê¸° ?œ„?•´ ?‹¤?‹œ ?¸?„°?Ÿ½?Š¸ ?™œ?„±?™”
+		//?ï¿½ï¿½?ï¿½ï¿½ ï¿½??ï¿½ï¿½ï¿½? ë°›ê¸° ?ï¿½ï¿½?ï¿½ï¿½ ?ï¿½ï¿½?ï¿½ï¿½ ?ï¿½ï¿½?ï¿½ï¿½?ï¿½ï¿½?ï¿½ï¿½ ?ï¿½ï¿½?ï¿½ï¿½?ï¿½ï¿½
 		HAL_UART_Receive_IT(&huart2, &rx_data, 1);
 	}
 }

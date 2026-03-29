@@ -1,5 +1,6 @@
 #include "PID_svc.h"
 #include "../Gyro_imu_svc/gyro_imu_svc.h"
+#include "../Driver/Dc_motor/dc_motor.h"
 
 // ==========================================
 // 1. 내부에서만 쓸 구조체들
@@ -92,7 +93,8 @@ void pid_svc_exe(void) {
 	if(move_sync.right_cmd > 100.0f) move_sync.right_cmd = 100.0f;
 	else if(move_sync.right_cmd < -100.0f) move_sync.right_cmd = -100.0f;
 
-	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
+//	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
+	DC_Motor_SetLeftRight((int16_t)move_sync.left_cmd, (int16_t)move_sync.right_cmd);
 }
 
 void pid_svc_set_gain(char type, float value) {
