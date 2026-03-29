@@ -1,4 +1,5 @@
 #include "PID_svc.h"
+#include "../Gyro_imu_svc/gyro_imu_svc.h"
 
 // ==========================================
 // 1. 내부에서만 쓸 구조체들
@@ -23,10 +24,11 @@ typedef struct {
 PID_Controller bal_pid;
 static Move_Synthesizer move_sync;
 
-// 외부 하드웨어 함수
-extern float Driver_Get_Angle(void);
-extern float Driver_Get_Rate(void);
-extern void Driver_Set_Motor(float left_pwm, float right_pwm);
+// TODO: 동료 모터 드라이버 구현 후 교체
+static void Driver_Set_Motor(float left_pwm, float right_pwm) {
+	(void)left_pwm;
+	(void)right_pwm;
+}
 
 // ==========================================
 // 3. 내부 계산용 함수들 (원래 PID.c에 있던 로직들)
@@ -77,8 +79,8 @@ void pid_svc_init(float kp, float ki, float kd) {
 }
 
 void pid_svc_exe(void) {
-	bal_pid.current_angle = Driver_Get_Angle();
-	bal_pid.current_rate = Driver_Get_Rate();
+	bal_pid.current_angle = GyroImuSvc_GetAngle();
+	bal_pid.current_rate = GyroImuSvc_GetRate();
 
 	PID_Compute_Internal();
 

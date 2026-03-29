@@ -13,5 +13,8 @@
 
 void GyroImuSvc_Init(I2C_HandleTypeDef *hi2c, UART_HandleTypeDef *huart);
 void GyroImuSvc_Execute(void);
+float GyroImuSvc_GetAngle(void);
+float GyroImuSvc_GetRate(void);
+float GyroImuSvc_GetPidOutput(void);
 
 #endif /* APP_GYRO_IMU_SVC_GYRO_IMU_SVC_H_ */
