@@ -6,6 +6,7 @@
  */
 
 #include "robot_svc.h"
+#include "../PID_SVC/PID_svc.h"
 
 // Robot State Variables
 uint8_t g_robot_mode = 0;   // 0: Stop, 1: Balance
@@ -68,7 +69,21 @@ void ROBOT_HandleCmd(Packet_t* pkt) {
             UART_COM_SendPacket(CMD_ACK, buf, 1);
             break;
 
-        // TODO: CMD_ROBOT_SET_PID
+        case CMD_ROBOT_SET_PID:
+            if (pkt->len < 3) {
+                err = ERR_INVALID_LEN;
+                UART_COM_SendPacket(CMD_ERROR, &err, 1);
+                break;
+            }
+            {
+                char type = (char)pkt->payload[0];
+                int16_t raw_val = (int16_t)((pkt->payload[1] << 8) | pkt->payload[2]);
+                float value = (float)raw_val / 100.0f;
+                pid_svc_set_gain(type, value);
+            }
+            buf[0] = CMD_ROBOT_SET_PID;
+            UART_COM_SendPacket(CMD_ACK, buf, 1);
+            break;
 
         default:
             err = ERR_INVALID_CMD;
