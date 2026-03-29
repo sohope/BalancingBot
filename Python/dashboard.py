@@ -6,6 +6,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import pyqtgraph as pg
 import random
+from serial_com import SerialCom
 
 # =======================================================
 # 자연스러운 풍경 + 실제 로봇 비주얼라이저 (레이더 추가)
@@ -411,199 +412,94 @@ class RobotVisualizer(QWidget):
 
 
 # =======================================================
-# 메인 대시보드 GUI (물리 키보드 이벤트 추가!)
+# 메인 대시보드 GUI (탭 구조)
 # =======================================================
 class BalancingBotGUI(QMainWindow):
-    def __init__(self):
+    def __init__(self, serial_com):
         super().__init__()
+        self.ser = serial_com
         self.setWindowTitle("TeleMetrix | Balancing Bot Dashboard")
         self.resize(1050, 780)
-        
-        # UI 포커스를 메인 윈도우로 강제하여 키보드 입력을 잘 받을 수 있게 합니다.
-        self.setFocusPolicy(Qt.StrongFocus) 
-        
+        self.setFocusPolicy(Qt.StrongFocus)
+
         self.setStyleSheet("""
             QMainWindow { background-color: #1a1b26; color: #c0caf5; }
             QLabel { color: #c0caf5; font-family: 'Segoe UI', sans-serif; }
             #HeaderFrame { background-color: #24283b; border-bottom: 3px solid #7aa2f7; }
-            #BottomFrame { background-color: #24283b; border-top: 3px solid #7aa2f7; }
             QGroupBox { background-color: #24283b; border: 2px solid #414868; border-radius: 12px; margin-top: 25px; padding-top: 20px; font-weight: bold; color: #c0caf5; }
             QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; top: 0px; padding: 4px 15px; background-color: #414868; border-radius: 8px; color: #7dcfff; }
             QProgressBar { border: 2px solid #414868; border-radius: 5px; text-align: center; background-color: #1a1b26; color: white; font-weight: bold; }
             QProgressBar::chunk { background-color: #e0af68; }
+            QTabWidget::pane { border: 1px solid #414868; background-color: #1a1b26; }
+            QTabBar::tab { background-color: #24283b; color: #c0caf5; padding: 10px 30px; border: 1px solid #414868; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; font-weight: bold; font-size: 14px; }
+            QTabBar::tab:selected { background-color: #1a1b26; color: #7dcfff; border-bottom: 2px solid #7dcfff; }
         """)
+
         mw = QWidget(); self.setCentralWidget(mw)
         ml = QVBoxLayout(mw); ml.setContentsMargins(0,0,0,0); ml.setSpacing(0)
 
+        # 헤더
         hf = QFrame(); hf.setObjectName("HeaderFrame")
         hl = QHBoxLayout(hf); hl.setContentsMargins(20,15,20,15)
-        tl = QLabel("🚀 TeleMetrix | Balancing Bot Dashboard")
+        tl = QLabel("TeleMetrix | Balancing Bot Dashboard")
         tl.setStyleSheet("font-size:22px;font-weight:900;color:#7dcfff;")
-        self.status_label = QLabel("PITCH: 0.0° | L-MOT: 0 | R-MOT: 0 | MODE: STOP")
-        self.status_label.setStyleSheet("font-size:16px;font-weight:bold;color:#1a1b26;background-color:#9ece6a;padding:8px 15px;border-radius:6px;")
-        hl.addWidget(tl);hl.addStretch();hl.addWidget(self.status_label)
+        self.status_label = QLabel("DISCONNECTED")
+        self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#f7768e;padding:8px 15px;border-radius:6px;")
+        hl.addWidget(tl); hl.addStretch(); hl.addWidget(self.status_label)
         ml.addWidget(hf)
 
-        pg.setConfigOption('background','#ffffff');pg.setConfigOption('foreground','#333333')
-        self.graph_widget = pg.PlotWidget()
-        self.graph_widget.setTitle("Real-time Pitch Angle (deg)",color="#333333",size="11pt",bold=True)
-        self.graph_widget.setYRange(-30,30);self.graph_widget.showGrid(x=True,y=True,alpha=0.15)
-        for an in ['left','bottom']:
-            ax=self.graph_widget.getAxis(an);ax.setPen(pg.mkPen(color='#CCCCCC',width=1));ax.setTextPen(pg.mkPen(color='#666666'))
-        self.graph_widget.getAxis('left').setLabel('Pitch (°)',color='#666666'); self.graph_widget.getAxis('bottom').setLabel('Time',color='#666666')
-        self.time_data=list(range(100));self.pitch_data=[0]*100
-        self.data_line=self.graph_widget.plot(self.time_data,self.pitch_data,pen=pg.mkPen(color='#2563EB',width=2.5),antialias=True)
-        self.graph_widget.addItem(pg.InfiniteLine(angle=0,movable=False,pen=pg.mkPen(color='#EF4444',width=1.5,style=Qt.DashLine)))
-        
-        self.robot_avatar = RobotVisualizer()
+        # 탭
+        self.tabs = QTabWidget()
+        self.demo_tab = QWidget()
+        self.debug_tab = QWidget()
+        self.tabs.addTab(self.demo_tab, "DEMO")
+        self.tabs.addTab(self.debug_tab, "DEBUG")
 
-        # 레이아웃: 풍경 아바타 (위)
-        gl=QHBoxLayout();gl.setContentsMargins(20,15,20,10);gl.addWidget(self.robot_avatar)
-        ml.addLayout(gl,stretch=2)
+        # 데모탭: placeholder
+        demo_layout = QVBoxLayout(self.demo_tab)
+        demo_layout.addWidget(QLabel("Demo tab - coming soon"))
 
-        # 레이아웃: 컨트롤 + 그래프 + 모터 상태 (아래)
-        cl=QHBoxLayout();cl.setContentsMargins(20,5,20,20);cl.setSpacing(20)
-        wg=QGroupBox("MANUAL OVERRIDE");wl=QGridLayout(wg)
-        
-        bs="border-radius:8px;padding:12px;font-weight:bold;font-size:13px;"
-        
-        self.btn_w=QPushButton("W (FWD)")
-        self.btn_w.setStyleSheet(f"QPushButton {{ background-color:rgba(125,207,255,0.15);border:2px solid #7dcfff;color:#7dcfff;{bs} }} QPushButton:pressed {{ background-color:#7dcfff;color:#1a1b26; }}")
-        self.btn_a=QPushButton("A (LFT)")
-        self.btn_a.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
-        self.btn_s=QPushButton("S (BWD)")
-        self.btn_s.setStyleSheet(f"QPushButton {{ background-color:rgba(224,175,104,0.15);border:2px solid #e0af68;color:#e0af68;{bs} }} QPushButton:pressed {{ background-color:#e0af68;color:#1a1b26; }}")
-        self.btn_d=QPushButton("D (RGT)")
-        self.btn_d.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
-        self.btn_stop=QPushButton("STOP")
-        self.btn_stop.setStyleSheet(f"QPushButton {{ background-color:#f7768e;border:2px solid #f7768e;color:#1a1b26;{bs} }} QPushButton:pressed {{ background-color:#db4b4b;color:#ffffff; }}")
-        
-        wl.addWidget(self.btn_w,0,1);wl.addWidget(self.btn_a,1,0);wl.addWidget(self.btn_stop,1,1);wl.addWidget(self.btn_d,1,2);wl.addWidget(self.btn_s,2,1)
-        cl.addWidget(wg,stretch=1)
-        
-        cl.addWidget(self.graph_widget, stretch=2)
-        
-        mg=QGroupBox("MOTOR PWM STATUS");ml2=QHBoxLayout(mg)
-        self.bar_left=QProgressBar();self.bar_left.setOrientation(Qt.Vertical);self.bar_left.setRange(-1000,1000);self.bar_left.setValue(0)
-        self.bar_right=QProgressBar();self.bar_right.setOrientation(Qt.Vertical);self.bar_right.setRange(-1000,1000);self.bar_right.setValue(0)
-        ml2.addWidget(QLabel("L-MOT"),alignment=Qt.AlignBottom|Qt.AlignHCenter);ml2.addWidget(self.bar_left)
-        ml2.addWidget(self.bar_right);ml2.addWidget(QLabel("R-MOT"),alignment=Qt.AlignBottom|Qt.AlignHCenter)
-        cl.addWidget(mg,stretch=1);ml.addLayout(cl,stretch=1)
+        # 디버깅탭: placeholder
+        debug_layout = QVBoxLayout(self.debug_tab)
+        debug_layout.addWidget(QLabel("Debug tab - coming soon"))
 
-        bf=QFrame();bf.setObjectName("BottomFrame");bl=QHBoxLayout(bf);bl.setContentsMargins(20,15,20,15)
-        self.btn_mode=QPushButton("MODE: STOP (Click to BALANCE)")
-        self.btn_mode.setStyleSheet("QPushButton { background-color:#e0af68;color:#1a1b26;font-weight:900;font-size:15px;padding:12px 25px;border-radius:8px; } QPushButton:pressed { background-color:#c49651; }")
-        self.btn_mode.setCheckable(True);self.btn_mode.clicked.connect(self.toggle_mode)
-        bl.addWidget(self.btn_mode);bl.addSpacing(40)
-        
-        ss="""QSlider::groove:horizontal{border:1px solid #414868;height:8px;background:#1a1b26;border-radius:4px;} QSlider::handle:horizontal{background:#7dcfff;width:18px;margin:-5px 0;border-radius:9px;}"""
-        bl.addWidget(QLabel("Gain P:"),alignment=Qt.AlignRight)
-        self.slider_p=QSlider(Qt.Horizontal);self.slider_p.setStyleSheet(ss);self.slider_p.setRange(0,100);bl.addWidget(self.slider_p)
-        bl.addSpacing(20);bl.addWidget(QLabel("Gain D:"),alignment=Qt.AlignRight)
-        self.slider_d=QSlider(Qt.Horizontal);self.slider_d.setStyleSheet(ss);self.slider_d.setRange(0,100);bl.addWidget(self.slider_d)
-        ml.addWidget(bf)
+        ml.addWidget(self.tabs)
 
-        # 상태 변수들
-        self.cmd_fwd = 0
-        self.cmd_turn = 0
-        self.current_pitch = 0.0
-        self.current_yaw = 0.0
+        # 시리얼 연결 상태 업데이트
+        self.timer = QTimer()
+        self.timer.setInterval(500)
+        self.timer.timeout.connect(self._update_status)
+        self.timer.start()
 
-        # 버튼을 마우스로 눌렀을 때의 이벤트 연동
-        self.btn_w.pressed.connect(lambda: setattr(self, 'cmd_fwd', 1))
-        self.btn_w.released.connect(lambda: setattr(self, 'cmd_fwd', 0))
-        self.btn_s.pressed.connect(lambda: setattr(self, 'cmd_fwd', -1))
-        self.btn_s.released.connect(lambda: setattr(self, 'cmd_fwd', 0))
-        
-        self.btn_a.pressed.connect(lambda: setattr(self, 'cmd_turn', -1))
-        self.btn_a.released.connect(lambda: setattr(self, 'cmd_turn', 0))
-        self.btn_d.pressed.connect(lambda: setattr(self, 'cmd_turn', 1)) 
-        self.btn_d.released.connect(lambda: setattr(self, 'cmd_turn', 0))
-
-        self.btn_stop.clicked.connect(lambda: self.stop_all())
-
-        self.timer=QTimer();self.timer.setInterval(20);self.timer.timeout.connect(self.update_dummy_data);self.timer.start()
-
-    # ==========================================
-    # 물리적 키보드 이벤트 가로채기
-    # ==========================================
-    def keyPressEvent(self, event):
-        # 키보드를 꾹 누르고 있을 때 발생하는 연속 이벤트를 무시 (한 번만 인식)
-        if event.isAutoRepeat(): 
-            return
-            
-        if event.key() == Qt.Key_W:
-            self.btn_w.setDown(True) # 화면의 버튼을 눌린 상태로 시각화
-            self.cmd_fwd = 1
-        elif event.key() == Qt.Key_S:
-            self.btn_s.setDown(True)
-            self.cmd_fwd = -1
-        elif event.key() == Qt.Key_A:
-            self.btn_a.setDown(True)
-            self.cmd_turn = -1
-        elif event.key() == Qt.Key_D:
-            self.btn_d.setDown(True)
-            self.cmd_turn = 1
-
-    def keyReleaseEvent(self, event):
-        if event.isAutoRepeat(): 
-            return
-            
-        if event.key() == Qt.Key_W:
-            self.btn_w.setDown(False) # 화면 버튼 원래대로
-            if self.cmd_fwd == 1: self.cmd_fwd = 0
-        elif event.key() == Qt.Key_S:
-            self.btn_s.setDown(False)
-            if self.cmd_fwd == -1: self.cmd_fwd = 0
-        elif event.key() == Qt.Key_A:
-            self.btn_a.setDown(False)
-            if self.cmd_turn == -1: self.cmd_turn = 0
-        elif event.key() == Qt.Key_D:
-            self.btn_d.setDown(False)
-            if self.cmd_turn == 1: self.cmd_turn = 0
-
-    def stop_all(self):
-        self.cmd_fwd = 0
-        self.cmd_turn = 0
-        self.current_pitch = 0.0
-        self.current_yaw = 0.0
-
-    def toggle_mode(self):
-        if self.btn_mode.isChecked():
-            self.btn_mode.setText("MODE: BALANCE (Click to STOP)")
-            self.btn_mode.setStyleSheet("QPushButton { background-color:#9ece6a;color:#1a1b26;font-weight:900;font-size:15px;padding:12px 25px;border-radius:8px; } QPushButton:pressed { background-color:#7fb04b; }")
+    def _update_status(self):
+        if self.ser.is_connected:
+            t = self.ser.telemetry
+            self.status_label.setText(f" PITCH: {t.angle:5.1f} | PID: {t.pid_output:5.1f} | L: {t.left_cmd:4d} | R: {t.right_cmd:4d} ")
+            self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#9ece6a;padding:8px 15px;border-radius:6px;")
         else:
-            self.btn_mode.setText("MODE: STOP (Click to BALANCE)")
-            self.btn_mode.setStyleSheet("QPushButton { background-color:#e0af68;color:#1a1b26;font-weight:900;font-size:15px;padding:12px 25px;border-radius:8px; } QPushButton:pressed { background-color:#c49651; }")
-            self.stop_all()
+            self.status_label.setText("DISCONNECTED")
+            self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#f7768e;padding:8px 15px;border-radius:6px;")
 
-    def update_dummy_data(self):
-        if not self.btn_mode.isChecked():
-            self.cmd_fwd = 0
-            self.cmd_turn = 0
+    def closeEvent(self, event):
+        self.ser.disconnect()
+        event.accept()
 
-        target_pitch = self.cmd_fwd * 15.0
-        self.current_pitch += (target_pitch - self.current_pitch) * 0.1
-        self.current_yaw += self.cmd_turn * 3.0
-        speed = self.cmd_fwd * 2.0
-
-        self.robot_avatar.set_state(self.current_pitch, self.current_yaw, speed)
-
-        base_pwm = int(self.cmd_fwd * 600)
-        turn_pwm = int(self.cmd_turn * 400)
-        cml = base_pwm + turn_pwm
-        cmr = base_pwm - turn_pwm
-
-        self.pitch_data=self.pitch_data[1:]+[self.current_pitch]
-        self.data_line.setData(self.time_data,self.pitch_data)
-        
-        self.bar_left.setValue(cml);self.bar_right.setValue(cmr)
-        
-        ms="BALANCE" if self.btn_mode.isChecked() else "STOP"
-        self.status_label.setText(f" PITCH: {self.current_pitch:5.1f}° | YAW: {self.current_yaw%360:5.1f}° | L-MOT: {cml:4d} | R-MOT: {cmr:4d} | MODE: {ms} ")
 
 if __name__ == "__main__":
-    app=QApplication(sys.argv)
-    window=BalancingBotGUI()
+    port = sys.argv[1] if len(sys.argv) > 1 else None
+    baud = int(sys.argv[2]) if len(sys.argv) > 2 else 9600
+
+    ser = SerialCom()
+    if port:
+        if ser.connect(port, baud):
+            print(f"[INFO] {port} 연결 완료 (Baud: {baud})")
+        else:
+            print(f"[WARN] {port} 연결 실패, 오프라인 모드로 실행")
+    else:
+        print("[INFO] COM 포트 미지정, 오프라인 모드로 실행")
+        print("  사용법: python dashboard.py COM27 9600")
+
+    app = QApplication(sys.argv)
+    window = BalancingBotGUI(ser)
     window.show()
     sys.exit(app.exec_())

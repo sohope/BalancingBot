@@ -1,3 +1,11 @@
+# dashboard.py (PyQt5)
+PyQt5==5.15.11
+pyqtgraph==0.14.0
+numpy>=2.0.0
+
+# plot_mpu6050.py (Dash)
 dash==2.18.2
 plotly==5.24.1
+
+# 공통
 pyserial==3.5
