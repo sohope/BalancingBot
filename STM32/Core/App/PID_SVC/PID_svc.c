@@ -1,38 +1,23 @@
 #include "PID_svc.h"
 #include "../Gyro_imu_svc/gyro_imu_svc.h"
-#include "../Driver/Dc_motor/dc_motor.h"
+#include "../ROBOT_SVC/robot_svc.h"
+#include "../../Driver/Dc_motor/dc_motor.h"
+
+#include <stdlib.h>
 
 // ==========================================
-// 1. 내부에서만 쓸 구조체들
+// 1. 설정값
 // ==========================================
-typedef enum { CMD_STOP = 0, CMD_FWD, CMD_BWD, CMD_LEFT, CMD_RIGHT } MoveCmd_t;
-
-typedef struct {
-	float balance_output;
-	MoveCmd_t move_cmd;
-	float move_speed_cmd;
-	float turn_gain;
-	float move_gain;
-	float move_output;
-	float turn_output;
-	float left_cmd;
-	float right_cmd;
-} Move_Synthesizer;
+#define MOVE_ANGLE_GAIN   0.15f   // speed 100 → target_angle 15도
+#define TURN_GAIN         0.3f    // turn 100 → 좌우 차이 30
 
 // ==========================================
-// 2. 전역 변수 (밖에서 절대 접근 못하게 static 처리)
+// 2. 전역 변수
 // ==========================================
 PID_Controller bal_pid;
-static Move_Synthesizer move_sync;
-
-// TODO: 동료 모터 드라이버 구현 후 교체
-static void Driver_Set_Motor(float left_pwm, float right_pwm) {
-	(void)left_pwm;
-	(void)right_pwm;
-}
 
 // ==========================================
-// 3. 내부 계산용 함수들 (원래 PID.c에 있던 로직들)
+// 3. PID 계산
 // ==========================================
 static void PID_Compute_Internal(void) {
 	bal_pid.angle_error = bal_pid.target_angle - bal_pid.current_angle;
@@ -49,21 +34,8 @@ static void PID_Compute_Internal(void) {
 	bal_pid.balance_output = output;
 }
 
-static void Move_Compute_Internal(void) {
-	move_sync.move_output = 0.0f;
-	move_sync.turn_output = 0.0f;
-
-	if (move_sync.move_cmd == CMD_FWD) move_sync.move_output = move_sync.move_speed_cmd * move_sync.move_gain;
-	else if (move_sync.move_cmd == CMD_BWD) move_sync.move_output = -(move_sync.move_speed_cmd * move_sync.move_gain);
-	else if (move_sync.move_cmd == CMD_LEFT) move_sync.turn_output = move_sync.move_speed_cmd * move_sync.turn_gain;
-	else if (move_sync.move_cmd == CMD_RIGHT) move_sync.turn_output = -(move_sync.move_speed_cmd * move_sync.turn_gain);
-
-	move_sync.left_cmd = move_sync.balance_output + move_sync.move_output + move_sync.turn_output;
-	move_sync.right_cmd = move_sync.balance_output + move_sync.move_output - move_sync.turn_output;
-}
-
 // ==========================================
-// 4. 외부로 열어주는 진짜 API 함수들 (사장님이 부르는 버튼)
+// 4. API 함수
 // ==========================================
 void pid_svc_init(float kp, float ki, float kd) {
 	bal_pid.pid_kp = kp;
@@ -72,29 +44,31 @@ void pid_svc_init(float kp, float ki, float kd) {
 	bal_pid.target_angle = 0.0f;
 	bal_pid.i_integral = 0.0f;
 	bal_pid.dt = 0.01f;
-
-	move_sync.move_cmd = CMD_STOP;
-	move_sync.move_speed_cmd = 0.0f;
-	move_sync.turn_gain = 0.5f;
-	move_sync.move_gain = 0.5f;
 }
 
 void pid_svc_exe(void) {
+	// 센서 읽기
 	bal_pid.current_angle = GyroImuSvc_GetAngle();
 	bal_pid.current_rate = GyroImuSvc_GetRate();
 
+	// 이동 명령 → target_angle 변경 (기울여서 이동)
+	bal_pid.target_angle = (float)g_target_speed * MOVE_ANGLE_GAIN;
+
+	// PID 계산
 	PID_Compute_Internal();
 
-	move_sync.balance_output = bal_pid.balance_output;
-	Move_Compute_Internal();
+	// 회전은 PID 출력 위에 좌우 차이로 적용
+	float turn = (float)g_target_turn * TURN_GAIN;
+	float left_cmd  = bal_pid.balance_output + turn;
+	float right_cmd = bal_pid.balance_output - turn;
 
-	if(move_sync.left_cmd > 100.0f) move_sync.left_cmd = 100.0f;
-	else if(move_sync.left_cmd < -100.0f) move_sync.left_cmd = -100.0f;
-	if(move_sync.right_cmd > 100.0f) move_sync.right_cmd = 100.0f;
-	else if(move_sync.right_cmd < -100.0f) move_sync.right_cmd = -100.0f;
+	// 클램프
+	if(left_cmd > 100.0f) left_cmd = 100.0f;
+	else if(left_cmd < -100.0f) left_cmd = -100.0f;
+	if(right_cmd > 100.0f) right_cmd = 100.0f;
+	else if(right_cmd < -100.0f) right_cmd = -100.0f;
 
-//	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
-	DC_Motor_SetLeftRight((int16_t)move_sync.left_cmd, (int16_t)move_sync.right_cmd);
+	DC_Motor_SetLeftRight((int16_t)left_cmd, (int16_t)right_cmd);
 }
 
 void pid_svc_set_gain(char type, float value) {
