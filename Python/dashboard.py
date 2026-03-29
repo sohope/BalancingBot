@@ -1,4 +1,5 @@
 import sys
+import os
 import math
 import numpy as np
 from PyQt5.QtWidgets import *
@@ -458,6 +459,7 @@ class BalancingBotGUI(QMainWindow):
         self.tabs.addTab(self.demo_tab, "DEMO")
         self.tabs.addTab(self.debug_tab, "DEBUG")
 
+        self._pid_saved = self._load_pid_settings()
         self._build_demo_tab()
         self._build_debug_tab()
 
@@ -486,7 +488,7 @@ class BalancingBotGUI(QMainWindow):
         # 피치 그래프
         self.graph_widget = pg.PlotWidget()
         self.graph_widget.setTitle("Real-time Pitch Angle (deg)", color="#333333", size="11pt", bold=True)
-        self.graph_widget.setYRange(-30, 30)
+        self.graph_widget.enableAutoRange(axis='y')
         self.graph_widget.showGrid(x=True, y=True, alpha=0.15)
         for an in ['left', 'bottom']:
             ax = self.graph_widget.getAxis(an)
@@ -574,14 +576,99 @@ class BalancingBotGUI(QMainWindow):
     # 디버깅탭 구성
     # ==========================================
     def _build_debug_tab(self):
-        dl = QVBoxLayout(self.debug_tab)
+        dl = QHBoxLayout(self.debug_tab)
         dl.setContentsMargins(15, 15, 15, 15)
-        dl.setSpacing(10)
+        dl.setSpacing(15)
 
+        # ── 왼쪽: PID 게인 튜닝 ──
+        pid_group = QGroupBox("PID GAIN TUNING")
+        pid_layout = QVBoxLayout(pid_group)
+        pid_layout.setSpacing(20)
+
+        slider_ss = """
+            QSlider::groove:horizontal { border:1px solid #414868; height:10px; background:#1a1b26; border-radius:5px; }
+            QSlider::handle:horizontal { width:20px; margin:-6px 0; border-radius:10px; }
+        """
+
+        spin_ss = """
+            QDoubleSpinBox {
+                background-color: #1a1b26; border: 2px solid #414868;
+                border-radius: 6px; padding: 6px; font-size: 16px; font-weight: bold;
+                font-family: monospace;
+            }
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+                width: 18px; border: 1px solid #414868;
+            }
+        """
+
+        def make_pid_slider(label, color, initial, max_val, step):
+            vl = QVBoxLayout()
+            # 라벨
+            lbl = QLabel(label)
+            lbl.setStyleSheet(f"font-size:20px;font-weight:900;color:{color};")
+            vl.addWidget(lbl)
+            # 슬라이더 + 스핀박스
+            hl = QHBoxLayout()
+            slider = QSlider(Qt.Horizontal)
+            slider.setStyleSheet(slider_ss + f"QSlider::handle:horizontal {{ background:{color}; }}")
+            slider.setRange(0, int(max_val * 100))
+            slider.setValue(int(initial * 100))
+            spin = QDoubleSpinBox()
+            spin.setStyleSheet(spin_ss + f"QDoubleSpinBox {{ color:{color}; }}")
+            spin.setRange(0.0, max_val)
+            spin.setSingleStep(0.01)
+            spin.setDecimals(2)
+            spin.setValue(initial)
+            spin.setMinimumWidth(100)
+            hl.addWidget(slider, stretch=3)
+            hl.addWidget(spin, stretch=1)
+            vl.addLayout(hl)
+            # 슬라이더 ↔ 스핀박스 동기화 (순환 방지)
+            syncing = [False]
+            def slider_to_spin(v):
+                if syncing[0]: return
+                syncing[0] = True
+                spin.setValue(v / 100.0)
+                syncing[0] = False
+            def spin_to_slider(v):
+                if syncing[0]: return
+                syncing[0] = True
+                slider.setValue(int(v * 100))
+                syncing[0] = False
+            slider.valueChanged.connect(slider_to_spin)
+            spin.valueChanged.connect(spin_to_slider)
+            return vl, slider, spin, step
+
+        vl_p, self.slider_p, self.spin_p, self.step_p = make_pid_slider("Kp", "#7dcfff", self._pid_saved[0], 50.0, 0.1)
+        vl_i, self.slider_i, self.spin_i, self.step_i = make_pid_slider("Ki", "#9ece6a", self._pid_saved[1], 10.0, 0.01)
+        vl_d, self.slider_d, self.spin_d, self.step_d = make_pid_slider("Kd", "#e0af68", self._pid_saved[2], 10.0, 0.01)
+
+        self.spin_p.valueChanged.connect(lambda v: self._on_pid_value_changed('P', v))
+        self.spin_i.valueChanged.connect(lambda v: self._on_pid_value_changed('I', v))
+        self.spin_d.valueChanged.connect(lambda v: self._on_pid_value_changed('D', v))
+
+        pid_layout.addLayout(vl_p)
+        pid_layout.addLayout(vl_i)
+        pid_layout.addLayout(vl_d)
+        btn_reset = QPushButton("RESET (P=15  I=1  D=0.5)")
+        btn_reset.setStyleSheet("""
+            QPushButton {
+                background-color: #f7768e; color: #1a1b26; font-weight: 900;
+                font-size: 13px; padding: 12px; border-radius: 8px;
+            }
+            QPushButton:pressed { background-color: #db4b4b; }
+        """)
+        btn_reset.clicked.connect(self._reset_pid)
+        pid_layout.addWidget(btn_reset)
+        pid_layout.addStretch()
+
+        dl.addWidget(pid_group, stretch=1)
+
+        # ── 오른쪽: 그래프 3개 세로 ──
         def make_plot(title, ylabel, color):
             w = pg.PlotWidget()
             w.setTitle(title, color="#333333", size="10pt", bold=True)
-            w.setYRange(-50, 50)
+            w.enableAutoRange(axis='y')
             w.showGrid(x=True, y=True, alpha=0.15)
             for an in ['left', 'bottom']:
                 ax = w.getAxis(an)
@@ -595,8 +682,7 @@ class BalancingBotGUI(QMainWindow):
                 pen=pg.mkPen(color=color, width=2), antialias=True)
             return w, data, line
 
-        # 그래프 3개
-        graphs_layout = QHBoxLayout()
+        graphs_layout = QVBoxLayout()
 
         self.dbg_angle_widget, self.dbg_angle_data, self.dbg_angle_line = \
             make_plot("Angle", "deg", "#ff922b")
@@ -608,75 +694,39 @@ class BalancingBotGUI(QMainWindow):
         graphs_layout.addWidget(self.dbg_angle_widget)
         graphs_layout.addWidget(self.dbg_pid_widget)
         graphs_layout.addWidget(self.dbg_rate_widget)
+
         dl.addLayout(graphs_layout, stretch=3)
 
-        # PID 게인 튜닝 패널
-        pid_group = QGroupBox("PID GAIN TUNING")
-        pid_layout = QHBoxLayout(pid_group)
-        pid_layout.setSpacing(30)
+    def _on_pid_value_changed(self, pid_type, value):
+        self.ser.send_set_pid(pid_type, value)
+        self._save_pid_settings()
 
-        ss = """
-            QDoubleSpinBox {
-                background-color: #1a1b26; color: #c0caf5; border: 2px solid #414868;
-                border-radius: 6px; padding: 8px; font-size: 16px; font-weight: bold;
-            }
-            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-                width: 20px; border: 1px solid #414868;
-            }
-        """
+    def _reset_pid(self):
+        self.spin_p.setValue(15.0)
+        self.spin_i.setValue(1.0)
+        self.spin_d.setValue(0.5)
 
-        def make_pid_control(label, color, initial):
-            vl = QVBoxLayout()
-            lbl = QLabel(label)
-            lbl.setStyleSheet(f"font-size:18px;font-weight:900;color:{color};")
-            lbl.setAlignment(Qt.AlignCenter)
-            spin = QDoubleSpinBox()
-            spin.setStyleSheet(ss)
-            spin.setRange(0.0, 99.99)
-            spin.setSingleStep(0.1)
-            spin.setDecimals(2)
-            spin.setValue(initial)
-            spin.setMinimumWidth(120)
-            vl.addWidget(lbl)
-            vl.addWidget(spin)
-            return vl, spin
+    def _load_pid_settings(self):
+        try:
+            import json
+            with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'r') as f:
+                d = json.load(f)
+                return [d.get('P', 15.0), d.get('I', 1.0), d.get('D', 0.5)]
+        except Exception:
+            return [15.0, 1.0, 0.5]
 
-        vl_p, self.spin_p = make_pid_control("Kp", "#7dcfff", 15.0)
-        vl_i, self.spin_i = make_pid_control("Ki", "#9ece6a", 1.0)
-        vl_d, self.spin_d = make_pid_control("Kd", "#e0af68", 0.5)
-
-        pid_layout.addLayout(vl_p)
-        pid_layout.addLayout(vl_i)
-        pid_layout.addLayout(vl_d)
-
-        # 전송 버튼
-        btn_send = QPushButton("SEND")
-        btn_send.setStyleSheet("""
-            QPushButton {
-                background-color: #7aa2f7; color: #1a1b26; font-weight: 900;
-                font-size: 16px; padding: 15px 40px; border-radius: 8px;
-            }
-            QPushButton:pressed { background-color: #5a82d7; }
-        """)
-        btn_send.clicked.connect(self._send_pid_gains)
-        pid_layout.addWidget(btn_send, alignment=Qt.AlignBottom)
-
-        # 현재 값 표시
-        self.pid_current_label = QLabel("Current: P=15.00  I=1.00  D=0.50")
-        self.pid_current_label.setStyleSheet("font-size:13px;color:#6b7280;")
-        self.pid_current_label.setAlignment(Qt.AlignCenter)
-
-        dl.addWidget(pid_group, stretch=1)
-        dl.addWidget(self.pid_current_label)
-
-    def _send_pid_gains(self):
-        p = self.spin_p.value()
-        i = self.spin_i.value()
-        d = self.spin_d.value()
-        self.ser.send_set_pid('P', p)
-        self.ser.send_set_pid('I', i)
-        self.ser.send_set_pid('D', d)
-        self.pid_current_label.setText(f"Sent: P={p:.2f}  I={i:.2f}  D={d:.2f}")
+    def _save_pid_settings(self):
+        import json
+        d = {
+            'P': self.spin_p.value(),
+            'I': self.spin_i.value(),
+            'D': self.spin_d.value(),
+        }
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'w') as f:
+                json.dump(d, f)
+        except Exception:
+            pass
 
     def _set_move(self, fwd, turn):
         if fwd is not None:
