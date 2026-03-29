@@ -1,3 +1,4 @@
+import sys
 import serial
 import serial.tools.list_ports
 import threading
@@ -10,8 +11,8 @@ from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 
 # ── 설정 ──────────────────────────────────────────────
-SERIAL_PORT = 'COM21'  # 자동 탐색 실패 시 직접 지정
-BAUD_RATE = 9600
+SERIAL_PORT = sys.argv[1] if len(sys.argv) > 1 else 'COM21'
+BAUD_RATE = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
 MAX_POINTS = 200    # 그래프에 표시할 최대 데이터 수
 UPDATE_MS = 200     # 그래프 갱신 주기 (ms)
 
