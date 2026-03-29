@@ -1,24 +1,8 @@
 #include "PID_svc.h"
 
 // ==========================================
-// 1. 내부에서만 쓸 구조체들 (원래 PID.h에 있던 것들)
+// 1. 내부에서만 쓸 구조체들
 // ==========================================
-typedef struct {
-	float target_angle;
-	float current_angle;
-	float current_rate;
-	float dt;
-	float pid_kp;
-	float pid_ki;
-	float pid_kd;
-	float i_integral;
-	float angle_error;
-	float p_term;
-	float i_term;
-	float d_term;
-	float balance_output;
-} PID_Controller;
-
 typedef enum { CMD_STOP = 0, CMD_FWD, CMD_BWD, CMD_LEFT, CMD_RIGHT } MoveCmd_t;
 
 typedef struct {
@@ -36,7 +20,7 @@ typedef struct {
 // ==========================================
 // 2. 전역 변수 (밖에서 절대 접근 못하게 static 처리)
 // ==========================================
-static PID_Controller bal_pid;
+PID_Controller bal_pid;
 static Move_Synthesizer move_sync;
 
 // 외부 하드웨어 함수

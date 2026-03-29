@@ -21,7 +21,8 @@ typedef struct
 
 }PID_Controller;
 
-void PID_Init(PID_Controller *pid, float kp, float ki, float kd);
-void PID_Compute(PID_Controller *pid);
+void pid_svc_init(float kp, float ki, float kd);
+void pid_svc_exe(void);
+void pid_svc_set_gain(char type, float value);
 
 #endif /* APP_PID_H_ */
