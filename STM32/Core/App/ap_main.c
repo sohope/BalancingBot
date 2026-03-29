@@ -3,7 +3,7 @@
 //----- 리재 모터 드라이브 추가
 #include "ROBOT_SVC/robot_svc.h"
 #include "PID_SVC/PID_svc.h"
-#define MOTOR_TEST_MODE  01
+//#define MOTOR_TEST_MODE  01
 //#define MOTOR_TEST_MODE  0 테스트 끝나면 0으로
 //-----
 
