@@ -414,6 +414,8 @@ class RobotVisualizer(QWidget):
 # =======================================================
 # 메인 대시보드 GUI (탭 구조)
 # =======================================================
+SPEED = 50  # 이동 명령 속도 (0~100)
+
 class BalancingBotGUI(QMainWindow):
     def __init__(self, serial_com):
         super().__init__()
@@ -455,9 +457,7 @@ class BalancingBotGUI(QMainWindow):
         self.tabs.addTab(self.demo_tab, "DEMO")
         self.tabs.addTab(self.debug_tab, "DEBUG")
 
-        # 데모탭: placeholder
-        demo_layout = QVBoxLayout(self.demo_tab)
-        demo_layout.addWidget(QLabel("Demo tab - coming soon"))
+        self._build_demo_tab()
 
         # 디버깅탭: placeholder
         debug_layout = QVBoxLayout(self.debug_tab)
@@ -465,20 +465,191 @@ class BalancingBotGUI(QMainWindow):
 
         ml.addWidget(self.tabs)
 
-        # 시리얼 연결 상태 업데이트
+        # 상태 변수
+        self.cmd_fwd = 0
+        self.cmd_turn = 0
+
+        # 타이머
         self.timer = QTimer()
-        self.timer.setInterval(500)
-        self.timer.timeout.connect(self._update_status)
+        self.timer.setInterval(30)
+        self.timer.timeout.connect(self._update)
         self.timer.start()
 
-    def _update_status(self):
+    # ==========================================
+    # 데모탭 구성
+    # ==========================================
+    def _build_demo_tab(self):
+        dl = QVBoxLayout(self.demo_tab)
+        dl.setContentsMargins(0,0,0,0); dl.setSpacing(0)
+
+        pg.setConfigOption('background', '#ffffff')
+        pg.setConfigOption('foreground', '#333333')
+
+        # 피치 그래프
+        self.graph_widget = pg.PlotWidget()
+        self.graph_widget.setTitle("Real-time Pitch Angle (deg)", color="#333333", size="11pt", bold=True)
+        self.graph_widget.setYRange(-30, 30)
+        self.graph_widget.showGrid(x=True, y=True, alpha=0.15)
+        for an in ['left', 'bottom']:
+            ax = self.graph_widget.getAxis(an)
+            ax.setPen(pg.mkPen(color='#CCCCCC', width=1))
+            ax.setTextPen(pg.mkPen(color='#666666'))
+        self.graph_widget.getAxis('left').setLabel('Pitch', color='#666666')
+        self.time_data = list(range(200))
+        self.pitch_data = [0] * 200
+        self.data_line = self.graph_widget.plot(self.time_data, self.pitch_data,
+            pen=pg.mkPen(color='#2563EB', width=2.5), antialias=True)
+        self.graph_widget.addItem(pg.InfiniteLine(angle=0, movable=False,
+            pen=pg.mkPen(color='#EF4444', width=1.5, style=Qt.DashLine)))
+
+        # 로봇 비주얼라이저
+        self.robot_avatar = RobotVisualizer()
+
+        # 상단: 비주얼라이저
+        gl = QHBoxLayout()
+        gl.setContentsMargins(20, 15, 20, 10)
+        gl.addWidget(self.robot_avatar)
+        dl.addLayout(gl, stretch=2)
+
+        # 하단: 컨트롤 + 그래프 + 모터 바
+        cl = QHBoxLayout()
+        cl.setContentsMargins(20, 5, 20, 20)
+        cl.setSpacing(20)
+
+        # WASD 버튼
+        wg = QGroupBox("MANUAL OVERRIDE")
+        wl = QGridLayout(wg)
+        bs = "border-radius:8px;padding:12px;font-weight:bold;font-size:13px;"
+
+        self.btn_w = QPushButton("W (FWD)")
+        self.btn_w.setStyleSheet(f"QPushButton {{ background-color:rgba(125,207,255,0.15);border:2px solid #7dcfff;color:#7dcfff;{bs} }} QPushButton:pressed {{ background-color:#7dcfff;color:#1a1b26; }}")
+        self.btn_a = QPushButton("A (LFT)")
+        self.btn_a.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
+        self.btn_s = QPushButton("S (BWD)")
+        self.btn_s.setStyleSheet(f"QPushButton {{ background-color:rgba(224,175,104,0.15);border:2px solid #e0af68;color:#e0af68;{bs} }} QPushButton:pressed {{ background-color:#e0af68;color:#1a1b26; }}")
+        self.btn_d = QPushButton("D (RGT)")
+        self.btn_d.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
+        self.btn_stop = QPushButton("STOP")
+        self.btn_stop.setStyleSheet(f"QPushButton {{ background-color:#f7768e;border:2px solid #f7768e;color:#1a1b26;{bs} }} QPushButton:pressed {{ background-color:#db4b4b;color:#ffffff; }}")
+
+        wl.addWidget(self.btn_w, 0, 1)
+        wl.addWidget(self.btn_a, 1, 0)
+        wl.addWidget(self.btn_stop, 1, 1)
+        wl.addWidget(self.btn_d, 1, 2)
+        wl.addWidget(self.btn_s, 2, 1)
+
+        self.btn_w.pressed.connect(lambda: self._set_move(1, 0))
+        self.btn_w.released.connect(lambda: self._set_move(0, None))
+        self.btn_s.pressed.connect(lambda: self._set_move(-1, 0))
+        self.btn_s.released.connect(lambda: self._set_move(0, None))
+        self.btn_a.pressed.connect(lambda: self._set_move(None, -1))
+        self.btn_a.released.connect(lambda: self._set_move(None, 0))
+        self.btn_d.pressed.connect(lambda: self._set_move(None, 1))
+        self.btn_d.released.connect(lambda: self._set_move(None, 0))
+        self.btn_stop.clicked.connect(lambda: self._set_move(0, 0))
+
+        cl.addWidget(wg, stretch=1)
+
+        # 그래프
+        cl.addWidget(self.graph_widget, stretch=2)
+
+        # 모터 PWM 바
+        mg = QGroupBox("MOTOR STATUS")
+        ml2 = QHBoxLayout(mg)
+        self.bar_left = QProgressBar()
+        self.bar_left.setOrientation(Qt.Vertical)
+        self.bar_left.setRange(-100, 100)
+        self.bar_left.setValue(0)
+        self.bar_right = QProgressBar()
+        self.bar_right.setOrientation(Qt.Vertical)
+        self.bar_right.setRange(-100, 100)
+        self.bar_right.setValue(0)
+        ml2.addWidget(QLabel("L"), alignment=Qt.AlignBottom | Qt.AlignHCenter)
+        ml2.addWidget(self.bar_left)
+        ml2.addWidget(self.bar_right)
+        ml2.addWidget(QLabel("R"), alignment=Qt.AlignBottom | Qt.AlignHCenter)
+        cl.addWidget(mg, stretch=1)
+
+        dl.addLayout(cl, stretch=1)
+
+    def _set_move(self, fwd, turn):
+        if fwd is not None:
+            self.cmd_fwd = fwd
+        if turn is not None:
+            self.cmd_turn = turn
+        self._send_move_packet()
+
+    def _send_move_packet(self):
+        if self.cmd_fwd > 0:
+            self.ser.send_move(1, SPEED)       # 전진
+        elif self.cmd_fwd < 0:
+            self.ser.send_move(2, SPEED)       # 후진
+        elif self.cmd_turn < 0:
+            self.ser.send_move(3, SPEED)       # 좌회전
+        elif self.cmd_turn > 0:
+            self.ser.send_move(4, SPEED)       # 우회전
+        else:
+            self.ser.send_move(0, 0)           # 정지
+
+    # ==========================================
+    # 키보드 이벤트
+    # ==========================================
+    def keyPressEvent(self, event):
+        if event.isAutoRepeat():
+            return
+        if event.key() == Qt.Key_W:
+            self.btn_w.setDown(True); self._set_move(1, 0)
+        elif event.key() == Qt.Key_S:
+            self.btn_s.setDown(True); self._set_move(-1, 0)
+        elif event.key() == Qt.Key_A:
+            self.btn_a.setDown(True); self._set_move(None, -1)
+        elif event.key() == Qt.Key_D:
+            self.btn_d.setDown(True); self._set_move(None, 1)
+
+    def keyReleaseEvent(self, event):
+        if event.isAutoRepeat():
+            return
+        if event.key() == Qt.Key_W:
+            self.btn_w.setDown(False)
+            if self.cmd_fwd == 1: self._set_move(0, None)
+        elif event.key() == Qt.Key_S:
+            self.btn_s.setDown(False)
+            if self.cmd_fwd == -1: self._set_move(0, None)
+        elif event.key() == Qt.Key_A:
+            self.btn_a.setDown(False)
+            if self.cmd_turn == -1: self._set_move(None, 0)
+        elif event.key() == Qt.Key_D:
+            self.btn_d.setDown(False)
+            if self.cmd_turn == 1: self._set_move(None, 0)
+
+    # ==========================================
+    # 업데이트 (30ms 주기)
+    # ==========================================
+    def _update(self):
+        t = self.ser.telemetry
+
+        # 비주얼라이저 업데이트
+        speed = self.cmd_fwd * 2.0
+        self.robot_avatar.set_state(t.angle, 0, speed)
+
+        # 피치 그래프
+        self.pitch_data = self.pitch_data[1:] + [t.angle]
+        self.data_line.setData(self.time_data, self.pitch_data)
+
+        # 모터 바
+        self.bar_left.setValue(t.left_cmd)
+        self.bar_right.setValue(t.right_cmd)
+
+        # 헤더 상태
         if self.ser.is_connected:
-            t = self.ser.telemetry
-            self.status_label.setText(f" PITCH: {t.angle:5.1f} | PID: {t.pid_output:5.1f} | L: {t.left_cmd:4d} | R: {t.right_cmd:4d} ")
-            self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#9ece6a;padding:8px 15px;border-radius:6px;")
+            self.status_label.setText(
+                f" PITCH: {t.angle:5.1f} | PID: {t.pid_output:5.1f} | L: {t.left_cmd:4d} | R: {t.right_cmd:4d} ")
+            self.status_label.setStyleSheet(
+                "font-size:14px;font-weight:bold;color:#1a1b26;background-color:#9ece6a;padding:8px 15px;border-radius:6px;")
         else:
             self.status_label.setText("DISCONNECTED")
-            self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#f7768e;padding:8px 15px;border-radius:6px;")
+            self.status_label.setStyleSheet(
+                "font-size:14px;font-weight:bold;color:#1a1b26;background-color:#f7768e;padding:8px 15px;border-radius:6px;")
 
     def closeEvent(self, event):
         self.ser.disconnect()
