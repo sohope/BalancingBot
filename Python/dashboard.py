@@ -6,6 +6,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 import pyqtgraph as pg
 import random
+import serial.tools.list_ports
 from serial_com import SerialCom
 
 # =======================================================
@@ -769,9 +770,28 @@ class BalancingBotGUI(QMainWindow):
         event.accept()
 
 
+def find_serial_port():
+    """블루투스/USB 시리얼 포트 자동 탐색"""
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        desc = p.description.upper()
+        if 'BLUETOOTH' in desc or 'BT' in desc or 'USB' in desc or 'SERIAL' in desc or 'ST' in desc:
+            return p.device
+    if ports:
+        return ports[0].device
+    return None
+
+
 if __name__ == "__main__":
     port = sys.argv[1] if len(sys.argv) > 1 else None
     baud = int(sys.argv[2]) if len(sys.argv) > 2 else 9600
+
+    if port is None:
+        port = find_serial_port()
+        if port:
+            print(f"[INFO] 자동 탐색: {port}")
+        else:
+            print("[INFO] 포트를 찾을 수 없음, 오프라인 모드로 실행")
 
     ser = SerialCom()
     if port:
@@ -779,9 +799,6 @@ if __name__ == "__main__":
             print(f"[INFO] {port} 연결 완료 (Baud: {baud})")
         else:
             print(f"[WARN] {port} 연결 실패, 오프라인 모드로 실행")
-    else:
-        print("[INFO] COM 포트 미지정, 오프라인 모드로 실행")
-        print("  사용법: python dashboard.py COM27 9600")
 
     app = QApplication(sys.argv)
     window = BalancingBotGUI(ser)
