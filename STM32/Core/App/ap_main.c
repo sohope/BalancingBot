@@ -1,7 +1,16 @@
 #include "ap_main.h"
 
+//----- 리재 모터 드라이브 추가
+#include "ROBOT_SVC/robot_svc.h"
+#include "PID_SVC/PID_svc.h"
+//-----
+
 extern I2C_HandleTypeDef hi2c1;
 extern UART_HandleTypeDef huart2;
+
+//----- 리재 모터 드라이브 추가
+extern TIM_HandleTypeDef htim3;
+//-----
 
 void ap_init()
 {
@@ -9,6 +18,8 @@ void ap_init()
 	UART_COM_Init(&huart6);
 	Robot_Init();
 	pid_svc_init(15.0f, 1.0f, 0.5f);
+	//리재추가
+	DC_Motor_Init(&htim3);
 }
 
 void ap_exe()

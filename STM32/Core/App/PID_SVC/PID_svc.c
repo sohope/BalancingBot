@@ -1,4 +1,8 @@
 #include "PID_svc.h"
+//-------리재 추가
+#include "../Driver/Dc_motor/dc_motor.h"
+//-------리재 추가
+
 
 // ==========================================
 // 1. 내부에서만 쓸 구조체들
@@ -77,8 +81,8 @@ void pid_svc_init(float kp, float ki, float kd) {
 }
 
 void pid_svc_exe(void) {
-	bal_pid.current_angle = Driver_Get_Angle();
-	bal_pid.current_rate = Driver_Get_Rate();
+//	bal_pid.current_angle = Driver_Get_Angle();
+//	bal_pid.current_rate = Driver_Get_Rate();
 
 	PID_Compute_Internal();
 
@@ -90,7 +94,8 @@ void pid_svc_exe(void) {
 	if(move_sync.right_cmd > 100.0f) move_sync.right_cmd = 100.0f;
 	else if(move_sync.right_cmd < -100.0f) move_sync.right_cmd = -100.0f;
 
-	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
+//	Driver_Set_Motor(move_sync.left_cmd, move_sync.right_cmd);
+	DC_Motor_SetLeftRight((int16_t)move_sync.left_cmd, (int16_t)move_sync.right_cmd);
 }
 
 void pid_svc_set_gain(char type, float value) {
