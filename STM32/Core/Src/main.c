@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdlib.h>
@@ -372,6 +373,7 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
@@ -380,6 +382,26 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, IN3_Pin|IN4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, IN1_Pin|IN2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : IN3_Pin IN4_Pin */
+  GPIO_InitStruct.Pin = IN3_Pin|IN4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : IN1_Pin IN2_Pin */
+  GPIO_InitStruct.Pin = IN1_Pin|IN2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -392,7 +414,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	{
 		if(rx_data == '\n')
 		{
-			rx_buffer[rx_index] = '\0'; //Î¨∏Ïû• ÎÅù ÌëúÏãú
+			rx_buffer[rx_index] = '\0'; //Î¨∏Ïû• ?Åù ?ëú?ãú
 			rx_flag = 1;
 		}
 		else
@@ -402,7 +424,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				rx_buffer[rx_index++] = rx_data;
 			}
 		}
-		//Îã§Ïùå Í∏ÄÏûêÎ•º Î∞õÍ∏∞ ÏúÑÌï¥ Îã§Ïãú Ïù∏ÌÑ∞ÎüΩÌä∏ ÌôúÏÑ±Ìôî
+		//?ã§?ùå Í∏??ûêÎ•? Î∞õÍ∏∞ ?úÑ?ï¥ ?ã§?ãú ?ù∏?Ñ∞?üΩ?ä∏ ?ôú?Ñ±?ôî
 		HAL_UART_Receive_IT(&huart2, &rx_data, 1);
 	}
 }
