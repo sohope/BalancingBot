@@ -10,10 +10,11 @@
 #define DC_MOTOR_LEFT_PWM_CHANNEL   TIM_CHANNEL_1
 #define DC_MOTOR_RIGHT_PWM_CHANNEL  TIM_CHANNEL_2
 
-#define DC_MOTOR_DEADBAND           15U
+#define DC_MOTOR_CMD_MAX            100U
+#define DC_MOTOR_DEADBAND_CMD       5U
 
-#define DC_MOTOR_LEFT_REVERSE       0
-#define DC_MOTOR_RIGHT_REVERSE      0
+#define DC_MOTOR_LEFT_REVERSE       1
+#define DC_MOTOR_RIGHT_REVERSE      1
 
 static TIM_HandleTypeDef *s_htim_pwm = NULL;
 
@@ -39,15 +40,15 @@ static uint16_t DC_Motor_ClampAbsToPwm(int32_t value)
         value = -value;
     }
 
-    if ((uint32_t)value < DC_MOTOR_DEADBAND) {
+    if ((uint32_t)value < DC_MOTOR_DEADBAND_CMD) {
         return 0;
     }
 
-    if ((uint32_t)value > pwm_max) {
-        return pwm_max;
+    if ((uint32_t)value > DC_MOTOR_CMD_MAX) {
+        value = DC_MOTOR_CMD_MAX;
     }
 
-    return (uint16_t)value;
+    return (uint16_t)(((uint32_t)value * pwm_max) / DC_MOTOR_CMD_MAX);
 }
 
 static void DC_Motor_SetLeftDir(int8_t dir)
