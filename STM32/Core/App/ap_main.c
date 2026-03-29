@@ -70,7 +70,7 @@ static void Motor_Test_Execute(void)
 
 void ap_init()
 {
-	GyroImuSvc_Init(&hi2c1, &huart2);
+	GyroImuSvc_Init(&hi2c1);
 	UART_COM_Init(&huart6);
 	Robot_Init();
 	pid_svc_init(15.0f, 1.0f, 0.5f);
