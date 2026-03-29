@@ -103,24 +103,26 @@ class SerialCom:
         buf.append(crc8(crc_data))
         return bytearray(buf)
 
-    def send_move(self, direction, speed):
-        pkt = self._build_packet(CMD_ROBOT_MOVE, [direction, speed])
-        if self.is_connected:
+    def _send(self, pkt):
+        if not self.is_connected:
+            return
+        try:
             self._ser.write(pkt)
+        except Exception:
+            pass
+
+    def send_move(self, direction, speed):
+        self._send(self._build_packet(CMD_ROBOT_MOVE, [direction, speed]))
 
     def send_set_pid(self, pid_type, value):
         """pid_type: 'P', 'I', 'D', value: float"""
         raw = int(value * 100)
         hi = (raw >> 8) & 0xFF
         lo = raw & 0xFF
-        pkt = self._build_packet(CMD_ROBOT_SET_PID, [ord(pid_type), hi, lo])
-        if self.is_connected:
-            self._ser.write(pkt)
+        self._send(self._build_packet(CMD_ROBOT_SET_PID, [ord(pid_type), hi, lo]))
 
     def send_set_mode(self, mode):
-        pkt = self._build_packet(CMD_ROBOT_SET_MODE, [mode])
-        if self.is_connected:
-            self._ser.write(pkt)
+        self._send(self._build_packet(CMD_ROBOT_SET_MODE, [mode]))
 
     # ── 수신 ──
 
