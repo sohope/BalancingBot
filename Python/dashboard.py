@@ -555,7 +555,6 @@ class BalancingBotGUI(QMainWindow):
 
         # Run/Stop 토글 버튼
         self.btn_mode = QPushButton("STOP [R]")
-        self.btn_mode.setCheckable(True)
         self._update_mode_btn()
         self.btn_mode.clicked.connect(self._toggle_mode)
 
@@ -825,7 +824,7 @@ class BalancingBotGUI(QMainWindow):
             pass
 
     def _toggle_mode(self):
-        self.is_running = self.btn_mode.isChecked()
+        self.is_running = not self.is_running
         self.ser.send_set_mode(1 if self.is_running else 0)
         self._update_mode_btn()
 
@@ -886,7 +885,6 @@ class BalancingBotGUI(QMainWindow):
         elif event.key() == Qt.Key_D:
             self.btn_d.setDown(True); self._set_move(None, 1)
         elif event.key() == Qt.Key_R:
-            self.btn_mode.setChecked(not self.btn_mode.isChecked())
             self._toggle_mode()
 
     def keyReleaseEvent(self, event):

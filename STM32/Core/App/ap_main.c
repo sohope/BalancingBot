@@ -33,6 +33,8 @@ void ap_exe()
 
 	if (g_robot_mode == 1) {
 		pid_svc_exe();
+	} else {
+		DC_Motor_StopAll();
 	}
 }
 
