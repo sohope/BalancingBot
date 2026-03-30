@@ -25,15 +25,15 @@ class RobotVisualizer(QWidget):
         
         rng = random.Random(42)
         self._trees = []
-        for i in range(25):
+        for i in range(80):
             bx = i * 65 + rng.randint(-20, 20)
             sc = 0.5 + rng.random() * 0.7
-            tt = rng.choice([0, 0, 0, 1, 1])  
-            depth = rng.uniform(0.55, 0.66)  
+            tt = rng.choice([0, 0, 0, 1, 1])
+            depth = rng.uniform(0.55, 0.66)
             self._trees.append((bx, sc, tt, depth))
-            
+
         self._rocks = []
-        for i in range(12):
+        for i in range(40):
             rx = i * 110 + rng.randint(-30, 30)
             rw = rng.randint(12, 30)
             rh = rng.randint(6, 14)
@@ -221,9 +221,6 @@ class RobotVisualizer(QWidget):
         WR = int(34*s)
         dx = int(10*s); dy = int(-6*s)
 
-        # 그림자
-        p.setBrush(QBrush(QColor(0,0,0,30))); p.setPen(Qt.NoPen)
-        p.drawEllipse(int(-WR-12*s), int(WR), int(WR*2+24*s), int(14*s))
         # 뒤쪽 바퀴
         bwr = int(WR*0.82)
         p.setBrush(QBrush(QColor("#1A1A1A"))); p.setPen(QPen(QColor("#0A0A0A"), max(1, int(1.5*s))))
@@ -650,7 +647,7 @@ class BalancingBotGUI(QMainWindow):
         pid_layout.addLayout(vl_p)
         pid_layout.addLayout(vl_i)
         pid_layout.addLayout(vl_d)
-        btn_reset = QPushButton("RESET (P=15  I=1  D=0.5)")
+        btn_reset = QPushButton("RESET (P=10  I=0.24  D=0.58)")
         btn_reset.setStyleSheet("""
             QPushButton {
                 background-color: #f7768e; color: #1a1b26; font-weight: 900;
@@ -702,18 +699,18 @@ class BalancingBotGUI(QMainWindow):
         self._save_pid_settings()
 
     def _reset_pid(self):
-        self.spin_p.setValue(15.0)
-        self.spin_i.setValue(1.0)
-        self.spin_d.setValue(0.5)
+        self.spin_p.setValue(10.0)
+        self.spin_i.setValue(0.24)
+        self.spin_d.setValue(0.58)
 
     def _load_pid_settings(self):
         try:
             import json
             with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'r') as f:
                 d = json.load(f)
-                return [d.get('P', 15.0), d.get('I', 1.0), d.get('D', 0.5)]
+                return [d.get('P', 10.0), d.get('I', 0.24), d.get('D', 0.58)]
         except Exception:
-            return [15.0, 1.0, 0.5]
+            return [10.0, 0.24, 0.58]
 
     def _save_pid_settings(self):
         import json
@@ -786,7 +783,7 @@ class BalancingBotGUI(QMainWindow):
 
         # 비주얼라이저 업데이트
         speed = self.cmd_fwd * 2.0
-        self.robot_avatar.set_state(t.angle, 0, speed)
+        self.robot_avatar.set_state(-t.angle, 0, speed)
 
         # 피치 그래프
         self.pitch_data = self.pitch_data[1:] + [t.angle]

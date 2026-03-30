@@ -13,7 +13,7 @@ void ap_init()
 	GyroImuSvc_Init(&hi2c1);
 	UART_COM_Init(&huart6);
 	Robot_Init();
-	pid_svc_init(15.0f, 1.0f, 0.5f);
+	pid_svc_init(10.0f, 0.24f, 0.58f);
 	DC_Motor_Init(&htim3);
 	Button_Init(&s_user_btn, GPIOC, GPIO_PIN_13);
 }
