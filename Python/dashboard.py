@@ -476,55 +476,37 @@ class BalancingBotGUI(QMainWindow):
     # 데모탭 구성
     # ==========================================
     def _build_demo_tab(self):
-        dl = QVBoxLayout(self.demo_tab)
-        dl.setContentsMargins(0,0,0,0); dl.setSpacing(0)
+        dl = QHBoxLayout(self.demo_tab)
+        dl.setContentsMargins(5, 5, 5, 5)
+        dl.setSpacing(5)
 
         pg.setConfigOption('background', '#ffffff')
         pg.setConfigOption('foreground', '#333333')
 
-        # 피치 그래프
-        self.graph_widget = pg.PlotWidget()
-        self.graph_widget.setTitle("Real-time Pitch Angle (deg)", color="#333333", size="11pt", bold=True)
-        self.graph_widget.enableAutoRange(axis='y')
-        self.graph_widget.showGrid(x=True, y=True, alpha=0.15)
-        for an in ['left', 'bottom']:
-            ax = self.graph_widget.getAxis(an)
-            ax.setPen(pg.mkPen(color='#CCCCCC', width=1))
-            ax.setTextPen(pg.mkPen(color='#666666'))
-        self.graph_widget.getAxis('left').setLabel('Pitch', color='#666666')
-        self.time_data = list(range(200))
-        self.pitch_data = [0] * 200
-        self.data_line = self.graph_widget.plot(self.time_data, self.pitch_data,
-            pen=pg.mkPen(color='#2563EB', width=2.5), antialias=True)
-        self.graph_widget.addItem(pg.InfiniteLine(angle=0, movable=False,
-            pen=pg.mkPen(color='#EF4444', width=1.5, style=Qt.DashLine)))
+        # ── 왼쪽: 비주얼라이저 + 컨트롤 + 모터 바 ──
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(5)
 
         # 로봇 비주얼라이저
         self.robot_avatar = RobotVisualizer()
+        left_panel.addWidget(self.robot_avatar, stretch=2)
 
-        # 상단: 비주얼라이저
-        gl = QHBoxLayout()
-        gl.setContentsMargins(20, 15, 20, 10)
-        gl.addWidget(self.robot_avatar)
-        dl.addLayout(gl, stretch=2)
-
-        # 하단: 컨트롤 + 그래프 + 모터 바
+        # 하단: 컨트롤 + 모터 바
         cl = QHBoxLayout()
-        cl.setContentsMargins(20, 5, 20, 20)
-        cl.setSpacing(20)
+        cl.setSpacing(10)
 
         # WASD 버튼
         wg = QGroupBox("MANUAL OVERRIDE")
         wl = QGridLayout(wg)
-        bs = "border-radius:8px;padding:12px;font-weight:bold;font-size:13px;"
+        bs = "border-radius:6px;padding:8px;font-weight:bold;font-size:12px;"
 
-        self.btn_w = QPushButton("W (FWD)")
+        self.btn_w = QPushButton("W")
         self.btn_w.setStyleSheet(f"QPushButton {{ background-color:rgba(125,207,255,0.15);border:2px solid #7dcfff;color:#7dcfff;{bs} }} QPushButton:pressed {{ background-color:#7dcfff;color:#1a1b26; }}")
-        self.btn_a = QPushButton("A (LFT)")
+        self.btn_a = QPushButton("A")
         self.btn_a.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
-        self.btn_s = QPushButton("S (BWD)")
+        self.btn_s = QPushButton("S")
         self.btn_s.setStyleSheet(f"QPushButton {{ background-color:rgba(224,175,104,0.15);border:2px solid #e0af68;color:#e0af68;{bs} }} QPushButton:pressed {{ background-color:#e0af68;color:#1a1b26; }}")
-        self.btn_d = QPushButton("D (RGT)")
+        self.btn_d = QPushButton("D")
         self.btn_d.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
         self.btn_stop = QPushButton("STOP")
         self.btn_stop.setStyleSheet(f"QPushButton {{ background-color:#f7768e;border:2px solid #f7768e;color:#1a1b26;{bs} }} QPushButton:pressed {{ background-color:#db4b4b;color:#ffffff; }}")
@@ -545,13 +527,10 @@ class BalancingBotGUI(QMainWindow):
         self.btn_d.released.connect(lambda: self._set_move(None, 0))
         self.btn_stop.clicked.connect(lambda: self._set_move(0, 0))
 
-        cl.addWidget(wg, stretch=1)
-
-        # 그래프
-        cl.addWidget(self.graph_widget, stretch=2)
+        cl.addWidget(wg, stretch=2)
 
         # 모터 PWM 바
-        mg = QGroupBox("MOTOR STATUS")
+        mg = QGroupBox("MOTOR")
         ml2 = QHBoxLayout(mg)
         self.bar_left = QProgressBar()
         self.bar_left.setOrientation(Qt.Vertical)
@@ -567,7 +546,40 @@ class BalancingBotGUI(QMainWindow):
         ml2.addWidget(QLabel("R"), alignment=Qt.AlignBottom | Qt.AlignHCenter)
         cl.addWidget(mg, stretch=1)
 
-        dl.addLayout(cl, stretch=1)
+        left_panel.addLayout(cl, stretch=1)
+        dl.addLayout(left_panel, stretch=1)
+
+        # ── 오른쪽: 그래프 3개 세로 ──
+        def make_demo_plot(title, ylabel, color):
+            w = pg.PlotWidget()
+            w.setTitle(title, color="#333333", size="10pt", bold=True)
+            w.enableAutoRange(axis='y')
+            w.showGrid(x=True, y=True, alpha=0.15)
+            for an in ['left', 'bottom']:
+                ax = w.getAxis(an)
+                ax.setPen(pg.mkPen(color='#CCCCCC', width=1))
+                ax.setTextPen(pg.mkPen(color='#666666'))
+            w.getAxis('left').setLabel(ylabel, color='#666666')
+            w.addItem(pg.InfiniteLine(angle=0, movable=False,
+                pen=pg.mkPen(color='#EF4444', width=1, style=Qt.DashLine)))
+            data = [0] * 200
+            line = w.plot(list(range(200)), data,
+                pen=pg.mkPen(color=color, width=2), antialias=True)
+            return w, data, line
+
+        graphs_layout = QVBoxLayout()
+        self.demo_angle_widget, self.demo_angle_data, self.demo_angle_line = \
+            make_demo_plot("Angle", "deg", "#ff922b")
+        self.demo_pid_widget, self.demo_pid_data, self.demo_pid_line = \
+            make_demo_plot("PID Output", "%", "#f06595")
+        self.demo_rate_widget, self.demo_rate_data, self.demo_rate_line = \
+            make_demo_plot("Gyro Rate", "deg/s", "#ffd43b")
+
+        graphs_layout.addWidget(self.demo_angle_widget)
+        graphs_layout.addWidget(self.demo_pid_widget)
+        graphs_layout.addWidget(self.demo_rate_widget)
+
+        dl.addLayout(graphs_layout, stretch=1)
 
     # ==========================================
     # 디버깅탭 구성
@@ -790,9 +802,13 @@ class BalancingBotGUI(QMainWindow):
         yaw_diff = (t.right_cmd - t.left_cmd) * 0.1
         self.robot_avatar.set_state(-t.angle, yaw_diff, avg_motor * 0.03)
 
-        # 피치 그래프
-        self.pitch_data = self.pitch_data[1:] + [t.angle]
-        self.data_line.setData(self.time_data, self.pitch_data)
+        # 데모탭 그래프
+        self.demo_angle_data = self.demo_angle_data[1:] + [t.angle]
+        self.demo_angle_line.setData(list(range(200)), self.demo_angle_data)
+        self.demo_pid_data = self.demo_pid_data[1:] + [t.pid_output]
+        self.demo_pid_line.setData(list(range(200)), self.demo_pid_data)
+        self.demo_rate_data = self.demo_rate_data[1:] + [t.gyro_rate]
+        self.demo_rate_line.setData(list(range(200)), self.demo_rate_data)
 
         # 모터 바
         self.bar_left.setValue(t.left_cmd)
