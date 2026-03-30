@@ -153,7 +153,7 @@ class RobotVisualizer(QWidget):
 
     def set_state(self, pitch, yaw, speed):
         self.pitch = pitch
-        self.yaw = yaw
+        self.yaw += yaw
         self.scroll_x += speed * 0.6
         self.cloud_offset += 0.3
         self.wheel_angle += speed * 3.0
@@ -578,6 +578,7 @@ class BalancingBotGUI(QMainWindow):
         self.cmd_fwd = 0
         self.cmd_turn = 0
         self.is_running = False
+        self._last_telem_angle = None
 
         # 타이머
         self.timer = QTimer()
@@ -987,9 +988,12 @@ class BalancingBotGUI(QMainWindow):
         t = self.ser.telemetry
 
         # 비주얼라이저 업데이트
-        # 실제 센서/모터 값으로 비주얼라이저 업데이트
         avg_motor = (t.left_cmd + t.right_cmd) / 2.0
-        yaw_delta = t.gyro_z * 0.1  # GZ(°/s) × 100ms
+        # 텔레메트리 갱신 시에만 yaw 누적 (중복 방지)
+        yaw_delta = 0.0
+        if self._last_telem_angle != t.angle:
+            yaw_delta = -t.gyro_z * 0.1
+            self._last_telem_angle = t.angle
         self.robot_avatar.set_state(-t.angle, yaw_delta, avg_motor * 0.03)
         if hasattr(self, 'radar_widget'):
             self.radar_widget.setYaw(self.robot_avatar.yaw)
