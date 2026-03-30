@@ -432,7 +432,7 @@ class BalancingBotGUI(QMainWindow):
             QProgressBar { border: 2px solid #414868; border-radius: 5px; text-align: center; background-color: #1a1b26; color: white; font-weight: bold; }
             QProgressBar::chunk { background-color: #e0af68; }
             QTabWidget::pane { border: 1px solid #414868; background-color: #1a1b26; }
-            QTabBar::tab { background-color: #24283b; color: #c0caf5; padding: 10px 30px; border: 1px solid #414868; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; font-weight: bold; font-size: 14px; }
+            QTabBar::tab { background-color: #24283b; color: #c0caf5; padding: 12px 40px; min-width: 120px; min-height: 20px; border: 1px solid #414868; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; font-weight: bold; font-size: 14px; }
             QTabBar::tab:selected { background-color: #1a1b26; color: #7dcfff; border-bottom: 2px solid #7dcfff; }
         """)
 
