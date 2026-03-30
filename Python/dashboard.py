@@ -55,6 +55,76 @@ class MotorBar(QWidget):
                 p.drawRoundedRect(5, mid_y, w - 10, bar_h, 3, 3)
 
 
+# =======================================================
+# 레이더 (방향 지시기) 위젯
+# =======================================================
+class RadarWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.yaw = 0.0
+        self.setMinimumSize(100, 100)
+
+    def setYaw(self, yaw):
+        self.yaw = yaw
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        s = min(w, h)
+        cx, cy = w // 2, h // 2
+        r = int(s * 0.35)
+
+        # 배경 원
+        p.setBrush(QBrush(QColor(20, 30, 50, 200)))
+        p.setPen(QPen(QColor("#7dcfff"), 2))
+        p.drawEllipse(cx - r, cy - r, r * 2, r * 2)
+
+        # 5도 단위 눈금 + 30도마다 숫자
+        f = p.font(); f.setPixelSize(max(8, int(s * 0.06))); p.setFont(f)
+        for deg in range(0, 360, 5):
+            a = math.radians(deg - 90)
+            if deg % 30 == 0:
+                p.setPen(QPen(QColor("#7dcfff"), 1))
+                x1 = cx + int((r - 6) * math.cos(a))
+                y1 = cy + int((r - 6) * math.sin(a))
+                x2 = cx + int(r * math.cos(a))
+                y2 = cy + int(r * math.sin(a))
+                p.drawLine(x1, y1, x2, y2)
+                tx = cx + int((r + max(10, int(s * 0.08))) * math.cos(a))
+                ty = cy + int((r + max(10, int(s * 0.08))) * math.sin(a))
+                p.setPen(QPen(QColor("#c0caf5"), 1))
+                p.drawText(tx - 12, ty - 6, 24, 12, Qt.AlignCenter, str(deg))
+            else:
+                p.setPen(QPen(QColor(125, 207, 255, 80), 1))
+                x1 = cx + int((r - 3) * math.cos(a))
+                y1 = cy + int((r - 3) * math.sin(a))
+                x2 = cx + int(r * math.cos(a))
+                y2 = cy + int(r * math.sin(a))
+                p.drawLine(x1, y1, x2, y2)
+
+        # 십자선
+        p.setPen(QPen(QColor(125, 207, 255, 60), 1, Qt.DashLine))
+        p.drawLine(cx - r + 6, cy, cx + r - 6, cy)
+        p.drawLine(cx, cy - r + 6, cx, cy + r - 6)
+
+        # 로봇 아이콘 (회전)
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(self.yaw)
+        bw, bh = 16, 24
+        p.setBrush(QBrush(QColor(220, 230, 240, 220)))
+        p.setPen(QPen(QColor(100, 150, 200), 1))
+        p.drawRoundedRect(-bw//2, -bh//2, bw, bh, 3, 3)
+        p.setBrush(QBrush(QColor("#1a1b26"))); p.setPen(Qt.NoPen)
+        p.drawRect(-bw//2 - 4, -7, 4, 14)
+        p.drawRect(bw//2, -7, 4, 14)
+        p.setBrush(QBrush(QColor("#f7768e")))
+        p.drawEllipse(-3, -bh//2 - 3, 6, 6)
+        p.restore()
+
+
 class RobotVisualizer(QWidget):
     def __init__(self):
         super().__init__()
@@ -618,6 +688,13 @@ class BalancingBotGUI(QMainWindow):
         ml2.addLayout(rv)
         cl.addWidget(mg)
 
+        # 레이더 (방향 지시기)
+        radar_group = QGroupBox("HEADING")
+        radar_layout = QVBoxLayout(radar_group)
+        self.radar_widget = RadarWidget()
+        radar_layout.addWidget(self.radar_widget)
+        cl.addWidget(radar_group)
+
         # 상태 패널
         status_group = QGroupBox("STATUS")
         sl = QVBoxLayout(status_group)
@@ -910,10 +987,12 @@ class BalancingBotGUI(QMainWindow):
         t = self.ser.telemetry
 
         # 비주얼라이저 업데이트
-        # 실제 모터 값으로 속도/회전 계산
+        # 실제 센서/모터 값으로 비주얼라이저 업데이트
         avg_motor = (t.left_cmd + t.right_cmd) / 2.0
-        yaw_diff = (t.right_cmd - t.left_cmd) * 0.1
-        self.robot_avatar.set_state(-t.angle, yaw_diff, avg_motor * 0.03)
+        yaw_delta = t.gyro_z * 0.1  # GZ(°/s) × 100ms
+        self.robot_avatar.set_state(-t.angle, yaw_delta, avg_motor * 0.03)
+        if hasattr(self, 'radar_widget'):
+            self.radar_widget.setYaw(self.robot_avatar.yaw)
 
         # 데모탭 그래프
         self.demo_angle_data = self.demo_angle_data[1:] + [t.angle]

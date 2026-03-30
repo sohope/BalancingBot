@@ -36,6 +36,7 @@ class TelemetryData:
         self.pid_output = 0.0
         self.left_cmd = 0
         self.right_cmd = 0
+        self.gyro_z = 0.0
 
     def parse(self, payload):
         if len(payload) < 10:
@@ -45,6 +46,8 @@ class TelemetryData:
         self.pid_output = struct.unpack('>h', bytes(payload[4:6]))[0] / 10.0
         self.left_cmd   = struct.unpack('>h', bytes(payload[6:8]))[0]
         self.right_cmd  = struct.unpack('>h', bytes(payload[8:10]))[0]
+        if len(payload) >= 12:
+            self.gyro_z = struct.unpack('>h', bytes(payload[10:12]))[0] / 10.0
         return True
 
 

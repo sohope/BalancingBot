@@ -53,25 +53,29 @@ void GyroImuSvc_Execute(void)
 		lastTelemetry = now;
 
 		extern PID_Controller bal_pid;
-		int16_t angle_i    = (int16_t)(s_angle * 10.0f);
-		int16_t rate_i     = (int16_t)(s_gyro_rate * 10.0f);
-		int16_t pid_out_i  = (int16_t)(bal_pid.balance_output * 10.0f);
-		int16_t left_cmd_i = DC_Motor_GetLeftCmd();
+		float gz = (float)raw.gyro_z / GYRO_SCALE;
+		int16_t angle_i     = (int16_t)(s_angle * 10.0f);
+		int16_t rate_i      = (int16_t)(s_gyro_rate * 10.0f);
+		int16_t pid_out_i   = (int16_t)(bal_pid.balance_output * 10.0f);
+		int16_t left_cmd_i  = DC_Motor_GetLeftCmd();
 		int16_t right_cmd_i = DC_Motor_GetRightCmd();
+		int16_t gz_i        = (int16_t)(gz * 10.0f);
 
-		uint8_t payload[10];
-		payload[0] = (uint8_t)(angle_i >> 8);
-		payload[1] = (uint8_t)(angle_i & 0xFF);
-		payload[2] = (uint8_t)(rate_i >> 8);
-		payload[3] = (uint8_t)(rate_i & 0xFF);
-		payload[4] = (uint8_t)(pid_out_i >> 8);
-		payload[5] = (uint8_t)(pid_out_i & 0xFF);
-		payload[6] = (uint8_t)(left_cmd_i >> 8);
-		payload[7] = (uint8_t)(left_cmd_i & 0xFF);
-		payload[8] = (uint8_t)(right_cmd_i >> 8);
-		payload[9] = (uint8_t)(right_cmd_i & 0xFF);
+		uint8_t payload[12];
+		payload[0]  = (uint8_t)(angle_i >> 8);
+		payload[1]  = (uint8_t)(angle_i & 0xFF);
+		payload[2]  = (uint8_t)(rate_i >> 8);
+		payload[3]  = (uint8_t)(rate_i & 0xFF);
+		payload[4]  = (uint8_t)(pid_out_i >> 8);
+		payload[5]  = (uint8_t)(pid_out_i & 0xFF);
+		payload[6]  = (uint8_t)(left_cmd_i >> 8);
+		payload[7]  = (uint8_t)(left_cmd_i & 0xFF);
+		payload[8]  = (uint8_t)(right_cmd_i >> 8);
+		payload[9]  = (uint8_t)(right_cmd_i & 0xFF);
+		payload[10] = (uint8_t)(gz_i >> 8);
+		payload[11] = (uint8_t)(gz_i & 0xFF);
 
-		UART_COM_SendPacket(CMD_ROBOT_TELEMETRY, payload, 10);
+		UART_COM_SendPacket(CMD_ROBOT_TELEMETRY, payload, 12);
 	}
 }
 
