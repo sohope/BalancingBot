@@ -13,6 +13,48 @@ from serial_com import SerialCom
 # =======================================================
 # 자연스러운 풍경 + 실제 로봇 비주얼라이저 (레이더 추가)
 # =======================================================
+# =======================================================
+# 모터 바 위젯 (중앙 기준 위아래로 노란색 바)
+# =======================================================
+class MotorBar(QWidget):
+    def __init__(self):
+        super().__init__()
+        self._value = 0
+        self.setMinimumWidth(36)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
+    def setValue(self, val):
+        self._value = max(-100, min(100, val))
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # 배경
+        p.setBrush(QBrush(QColor("#1a1b26")))
+        p.setPen(QPen(QColor("#414868"), 1))
+        p.drawRoundedRect(2, 2, w - 4, h - 4, 4, 4)
+
+        # 중앙선
+        mid_y = h // 2
+        p.setPen(QPen(QColor("#6b7280"), 1, Qt.DashLine))
+        p.drawLine(4, mid_y, w - 4, mid_y)
+
+        # 바 (중앙에서 위 또는 아래로)
+        if self._value != 0:
+            bar_h = int(abs(self._value) / 100.0 * (h / 2 - 6))
+            if self._value > 0:
+                p.setBrush(QBrush(QColor("#e0af68")))
+                p.setPen(Qt.NoPen)
+                p.drawRoundedRect(5, mid_y - bar_h, w - 10, bar_h, 3, 3)
+            else:
+                p.setBrush(QBrush(QColor("#e0af68")))
+                p.setPen(Qt.NoPen)
+                p.drawRoundedRect(5, mid_y, w - 10, bar_h, 3, 3)
+
+
 class RobotVisualizer(QWidget):
     def __init__(self):
         super().__init__()
@@ -465,6 +507,7 @@ class BalancingBotGUI(QMainWindow):
         # 상태 변수
         self.cmd_fwd = 0
         self.cmd_turn = 0
+        self.is_running = False
 
         # 타이머
         self.timer = QTimer()
@@ -491,14 +534,15 @@ class BalancingBotGUI(QMainWindow):
         self.robot_avatar = RobotVisualizer()
         left_panel.addWidget(self.robot_avatar, stretch=2)
 
-        # 하단: 컨트롤 + 모터 바
+        # 하단: WASD + 속도 + 모터 바 + 상태
         cl = QHBoxLayout()
-        cl.setSpacing(10)
+        cl.setSpacing(8)
 
-        # WASD 버튼
-        wg = QGroupBox("MANUAL OVERRIDE")
+        # WASD 버튼 (컴팩트 정사각)
+        wg = QGroupBox("CONTROL")
         wl = QGridLayout(wg)
-        bs = "border-radius:6px;padding:8px;font-weight:bold;font-size:12px;"
+        wl.setSpacing(3)
+        bs = "border-radius:6px;padding:6px;font-weight:bold;font-size:11px;min-width:32px;min-height:32px;"
 
         self.btn_w = QPushButton("W")
         self.btn_w.setStyleSheet(f"QPushButton {{ background-color:rgba(125,207,255,0.15);border:2px solid #7dcfff;color:#7dcfff;{bs} }} QPushButton:pressed {{ background-color:#7dcfff;color:#1a1b26; }}")
@@ -508,43 +552,86 @@ class BalancingBotGUI(QMainWindow):
         self.btn_s.setStyleSheet(f"QPushButton {{ background-color:rgba(224,175,104,0.15);border:2px solid #e0af68;color:#e0af68;{bs} }} QPushButton:pressed {{ background-color:#e0af68;color:#1a1b26; }}")
         self.btn_d = QPushButton("D")
         self.btn_d.setStyleSheet(f"QPushButton {{ background-color:rgba(187,154,247,0.15);border:2px solid #bb9af7;color:#bb9af7;{bs} }} QPushButton:pressed {{ background-color:#bb9af7;color:#1a1b26; }}")
-        self.btn_stop = QPushButton("STOP")
-        self.btn_stop.setStyleSheet(f"QPushButton {{ background-color:#f7768e;border:2px solid #f7768e;color:#1a1b26;{bs} }} QPushButton:pressed {{ background-color:#db4b4b;color:#ffffff; }}")
+
+        # Run/Stop 토글 버튼
+        self.btn_mode = QPushButton("STOP [R]")
+        self.btn_mode.setCheckable(True)
+        self._update_mode_btn()
+        self.btn_mode.clicked.connect(self._toggle_mode)
 
         wl.addWidget(self.btn_w, 0, 1)
         wl.addWidget(self.btn_a, 1, 0)
-        wl.addWidget(self.btn_stop, 1, 1)
+        wl.addWidget(self.btn_mode, 1, 1)
         wl.addWidget(self.btn_d, 1, 2)
         wl.addWidget(self.btn_s, 2, 1)
 
-        self.btn_w.pressed.connect(lambda: self._set_move(1, 0))
+        self.btn_w.pressed.connect(lambda: self._set_move(1, None))
         self.btn_w.released.connect(lambda: self._set_move(0, None))
-        self.btn_s.pressed.connect(lambda: self._set_move(-1, 0))
+        self.btn_s.pressed.connect(lambda: self._set_move(-1, None))
         self.btn_s.released.connect(lambda: self._set_move(0, None))
         self.btn_a.pressed.connect(lambda: self._set_move(None, -1))
         self.btn_a.released.connect(lambda: self._set_move(None, 0))
         self.btn_d.pressed.connect(lambda: self._set_move(None, 1))
         self.btn_d.released.connect(lambda: self._set_move(None, 0))
-        self.btn_stop.clicked.connect(lambda: self._set_move(0, 0))
 
-        cl.addWidget(wg, stretch=2)
+        cl.addWidget(wg)
 
-        # 모터 PWM 바
+        # 속도 슬라이더
+        spd_group = QGroupBox("SPEED")
+        spd_layout = QVBoxLayout(spd_group)
+        self.demo_speed_slider = QSlider(Qt.Vertical)
+        self.demo_speed_slider.setRange(0, 100)
+        self.demo_speed_slider.setValue(SPEED)
+        self.demo_speed_slider.setStyleSheet("""
+            QSlider::groove:vertical { border:1px solid #414868; width:8px; background:#1a1b26; border-radius:4px; }
+            QSlider::handle:vertical { background:#7dcfff; height:16px; margin:-4px 0; border-radius:8px; }
+        """)
+        self.demo_speed_label = QLabel(f"{SPEED}")
+        self.demo_speed_label.setStyleSheet("font-size:14px;font-weight:bold;color:#7dcfff;font-family:monospace;")
+        self.demo_speed_label.setAlignment(Qt.AlignCenter)
+        spd_layout.addWidget(self.demo_speed_slider, alignment=Qt.AlignHCenter)
+        spd_layout.addWidget(self.demo_speed_label)
+        self.demo_speed_slider.valueChanged.connect(self._on_demo_speed_changed)
+        cl.addWidget(spd_group)
+
+        # 모터 바 (커스텀 위젯, -100~+100, 중앙 기준 위아래)
         mg = QGroupBox("MOTOR")
         ml2 = QHBoxLayout(mg)
-        self.bar_left = QProgressBar()
-        self.bar_left.setOrientation(Qt.Vertical)
-        self.bar_left.setRange(-100, 100)
-        self.bar_left.setValue(0)
-        self.bar_right = QProgressBar()
-        self.bar_right.setOrientation(Qt.Vertical)
-        self.bar_right.setRange(-100, 100)
-        self.bar_right.setValue(0)
-        ml2.addWidget(QLabel("L"), alignment=Qt.AlignBottom | Qt.AlignHCenter)
-        ml2.addWidget(self.bar_left)
-        ml2.addWidget(self.bar_right)
-        ml2.addWidget(QLabel("R"), alignment=Qt.AlignBottom | Qt.AlignHCenter)
-        cl.addWidget(mg, stretch=1)
+        ml2.setAlignment(Qt.AlignCenter)
+        self.motor_bar_left = MotorBar()
+        self.motor_bar_right = MotorBar()
+        self.lbl_left_val = QLabel("0")
+        self.lbl_right_val = QLabel("0")
+        for lbl in [self.lbl_left_val, self.lbl_right_val]:
+            lbl.setStyleSheet("font-size:11px;font-weight:bold;color:#e0af68;font-family:monospace;")
+            lbl.setAlignment(Qt.AlignCenter)
+        lv = QVBoxLayout()
+        lv.setAlignment(Qt.AlignCenter)
+        lv.addWidget(QLabel("L"), alignment=Qt.AlignHCenter)
+        lv.addWidget(self.motor_bar_left, alignment=Qt.AlignHCenter)
+        lv.addWidget(self.lbl_left_val)
+        rv = QVBoxLayout()
+        rv.setAlignment(Qt.AlignCenter)
+        rv.addWidget(QLabel("R"), alignment=Qt.AlignHCenter)
+        rv.addWidget(self.motor_bar_right, alignment=Qt.AlignHCenter)
+        rv.addWidget(self.lbl_right_val)
+        ml2.addLayout(lv)
+        ml2.addLayout(rv)
+        cl.addWidget(mg)
+
+        # 상태 패널
+        status_group = QGroupBox("STATUS")
+        sl = QVBoxLayout(status_group)
+        sl.setSpacing(8)
+        self.lbl_angle = QLabel("Angle:  0.0°")
+        self.lbl_pid = QLabel("PID:    0.0%")
+        self.lbl_motor_l = QLabel("L-MOT:  0")
+        self.lbl_motor_r = QLabel("R-MOT:  0")
+        self.lbl_mode = QLabel("Mode: STOP")
+        for lbl in [self.lbl_angle, self.lbl_pid, self.lbl_motor_l, self.lbl_motor_r, self.lbl_mode]:
+            lbl.setStyleSheet("font-size:13px;font-weight:bold;color:#c0caf5;font-family:monospace;")
+            sl.addWidget(lbl)
+        cl.addWidget(status_group)
 
         left_panel.addLayout(cl, stretch=1)
         dl.addLayout(left_panel, stretch=1)
@@ -737,6 +824,31 @@ class BalancingBotGUI(QMainWindow):
         except Exception:
             pass
 
+    def _toggle_mode(self):
+        self.is_running = self.btn_mode.isChecked()
+        self.ser.send_set_mode(1 if self.is_running else 0)
+        self._update_mode_btn()
+
+    def _update_mode_btn(self):
+        running = getattr(self, 'is_running', False)
+        if running:
+            self.btn_mode.setStyleSheet(
+                "QPushButton { background-color:#9ece6a;border:2px solid #9ece6a;color:#1a1b26;"
+                "border-radius:6px;padding:6px;font-weight:bold;font-size:11px;min-width:32px;min-height:32px; }"
+                "QPushButton:pressed { background-color:#7fb04b; }")
+            self.btn_mode.setText("RUN [R]")
+        else:
+            self.btn_mode.setStyleSheet(
+                "QPushButton { background-color:#f7768e;border:2px solid #f7768e;color:#1a1b26;"
+                "border-radius:6px;padding:6px;font-weight:bold;font-size:11px;min-width:32px;min-height:32px; }"
+                "QPushButton:pressed { background-color:#db4b4b; }")
+            self.btn_mode.setText("STOP [R]")
+
+    def _on_demo_speed_changed(self, val):
+        global SPEED
+        SPEED = val
+        self.demo_speed_label.setText(str(val))
+
     def _set_move(self, fwd, turn):
         if fwd is not None:
             self.cmd_fwd = fwd
@@ -773,6 +885,9 @@ class BalancingBotGUI(QMainWindow):
             self.btn_a.setDown(True); self._set_move(None, -1)
         elif event.key() == Qt.Key_D:
             self.btn_d.setDown(True); self._set_move(None, 1)
+        elif event.key() == Qt.Key_R:
+            self.btn_mode.setChecked(not self.btn_mode.isChecked())
+            self._toggle_mode()
 
     def keyReleaseEvent(self, event):
         if event.isAutoRepeat():
@@ -811,8 +926,18 @@ class BalancingBotGUI(QMainWindow):
         self.demo_rate_line.setData(list(range(200)), self.demo_rate_data)
 
         # 모터 바
-        self.bar_left.setValue(t.left_cmd)
-        self.bar_right.setValue(t.right_cmd)
+        self.motor_bar_left.setValue(t.left_cmd)
+        self.motor_bar_right.setValue(t.right_cmd)
+        self.lbl_left_val.setText(str(t.left_cmd))
+        self.lbl_right_val.setText(str(t.right_cmd))
+
+        # 상태 패널
+        self.lbl_angle.setText(f"Angle: {t.angle:6.1f}")
+        self.lbl_pid.setText(f"PID:   {t.pid_output:6.1f}")
+        self.lbl_motor_l.setText(f"L-MOT: {t.left_cmd:4d}")
+        self.lbl_motor_r.setText(f"R-MOT: {t.right_cmd:4d}")
+        mode_str = "RUN" if getattr(self, 'is_running', False) else "STOP"
+        self.lbl_mode.setText(f"Mode:  {mode_str}")
 
         # 디버깅탭 그래프
         self.dbg_angle_data = self.dbg_angle_data[1:] + [t.angle]
