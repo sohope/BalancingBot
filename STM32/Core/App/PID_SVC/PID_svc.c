@@ -9,7 +9,7 @@
 // 1. 설정값
 // ==========================================
 #define MOVE_ANGLE_GAIN   (-0.05f)  // speed 100 → 최대 5도 기울기
-#define TURN_GAIN         0.3f     // turn 100 → 좌우 차이 30
+#define TURN_GAIN         (-0.3f)  // 모터 reverse 보정, turn 100 → 좌우 차이 30
 #define RAMP_RATE         0.5f     // target_angle 초당 변화 최대 (도/루프)
 
 // ==========================================

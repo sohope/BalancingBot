@@ -52,11 +52,11 @@ void ROBOT_HandleCmd(Packet_t* pkt) {
             uint8_t spd = pkt->payload[1];
 
             switch(dir) {
-                case 1:  g_target_speed = spd;  g_target_turn = 0;    break; // Fwd
-                case 2:  g_target_speed = -spd; g_target_turn = 0;    break; // Bwd
-                case 3:  g_target_speed = 0;    g_target_turn = -spd; break; // Left Turn
-                case 4:  g_target_speed = 0;    g_target_turn = spd;  break; // Right Turn
-                default: g_target_speed = 0;    g_target_turn = 0;    break; // Stop
+                case 1:  g_target_speed = spd;   break; // Fwd
+                case 2:  g_target_speed = -spd;  break; // Bwd
+                case 3:  g_target_turn = -spd;   break; // Left Turn
+                case 4:  g_target_turn = spd;    break; // Right Turn
+                default: g_target_speed = 0; g_target_turn = 0; break; // Stop
             }
 
             buf[0] = CMD_ROBOT_MOVE;

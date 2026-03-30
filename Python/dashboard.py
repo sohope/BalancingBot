@@ -419,7 +419,7 @@ class BalancingBotGUI(QMainWindow):
     def __init__(self, serial_com):
         super().__init__()
         self.ser = serial_com
-        self.setWindowTitle("TeleMetrix | Balancing Bot Dashboard")
+        self.setWindowTitle("Balancing Bot Dashboard")
         self.resize(1050, 780)
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -442,7 +442,7 @@ class BalancingBotGUI(QMainWindow):
         # 헤더
         hf = QFrame(); hf.setObjectName("HeaderFrame")
         hl = QHBoxLayout(hf); hl.setContentsMargins(20,15,20,15)
-        tl = QLabel("TeleMetrix | Balancing Bot Dashboard")
+        tl = QLabel("Balancing Bot Dashboard")
         tl.setStyleSheet("font-size:22px;font-weight:900;color:#7dcfff;")
         self.status_label = QLabel("DISCONNECTED")
         self.status_label.setStyleSheet("font-size:14px;font-weight:bold;color:#1a1b26;background-color:#f7768e;padding:8px 15px;border-radius:6px;")
@@ -733,16 +733,19 @@ class BalancingBotGUI(QMainWindow):
         self._send_move_packet()
 
     def _send_move_packet(self):
+        # 전진/후진 전송
         if self.cmd_fwd > 0:
-            self.ser.send_move(1, SPEED)       # 전진
+            self.ser.send_move(1, SPEED)
         elif self.cmd_fwd < 0:
-            self.ser.send_move(2, SPEED)       # 후진
-        elif self.cmd_turn < 0:
-            self.ser.send_move(3, SPEED)       # 좌회전
-        elif self.cmd_turn > 0:
-            self.ser.send_move(4, SPEED)       # 우회전
+            self.ser.send_move(2, SPEED)
         else:
-            self.ser.send_move(0, 0)           # 정지
+            self.ser.send_move(0, 0)
+
+        # 회전 전송 (전진/후진과 독립)
+        if self.cmd_turn < 0:
+            self.ser.send_move(3, SPEED)
+        elif self.cmd_turn > 0:
+            self.ser.send_move(4, SPEED)
 
     # ==========================================
     # 키보드 이벤트
@@ -751,9 +754,9 @@ class BalancingBotGUI(QMainWindow):
         if event.isAutoRepeat():
             return
         if event.key() == Qt.Key_W:
-            self.btn_w.setDown(True); self._set_move(1, 0)
+            self.btn_w.setDown(True); self._set_move(1, None)
         elif event.key() == Qt.Key_S:
-            self.btn_s.setDown(True); self._set_move(-1, 0)
+            self.btn_s.setDown(True); self._set_move(-1, None)
         elif event.key() == Qt.Key_A:
             self.btn_a.setDown(True); self._set_move(None, -1)
         elif event.key() == Qt.Key_D:
@@ -782,8 +785,10 @@ class BalancingBotGUI(QMainWindow):
         t = self.ser.telemetry
 
         # 비주얼라이저 업데이트
-        speed = self.cmd_fwd * 2.0
-        self.robot_avatar.set_state(-t.angle, 0, speed)
+        # 실제 모터 값으로 속도/회전 계산
+        avg_motor = (t.left_cmd + t.right_cmd) / 2.0
+        yaw_diff = (t.right_cmd - t.left_cmd) * 0.1
+        self.robot_avatar.set_state(-t.angle, yaw_diff, avg_motor * 0.03)
 
         # 피치 그래프
         self.pitch_data = self.pitch_data[1:] + [t.angle]
