@@ -15,5 +15,6 @@ void GyroImuSvc_Init(I2C_HandleTypeDef *hi2c);
 void GyroImuSvc_Execute(void);
 float GyroImuSvc_GetAngle(void);
 float GyroImuSvc_GetRate(void);
+void GyroImuSvc_SetAlpha(float alpha);
 
 #endif /* APP_GYRO_IMU_SVC_GYRO_IMU_SVC_H_ */

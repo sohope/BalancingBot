@@ -566,7 +566,7 @@ class BalancingBotGUI(QMainWindow):
         self.demo_tab = QWidget()
         self.debug_tab = QWidget()
         self.tabs.addTab(self.demo_tab, "DEMO")
-        self.tabs.addTab(self.debug_tab, "DEBUG")
+        self.tabs.addTab(self.debug_tab, "SETTINGS")
 
         self._pid_saved = self._load_pid_settings()
         self._build_demo_tab()
@@ -646,24 +646,6 @@ class BalancingBotGUI(QMainWindow):
 
         cl.addWidget(wg)
 
-        # 속도 슬라이더
-        spd_group = QGroupBox("SPEED")
-        spd_layout = QVBoxLayout(spd_group)
-        self.demo_speed_slider = QSlider(Qt.Vertical)
-        self.demo_speed_slider.setRange(0, 100)
-        self.demo_speed_slider.setValue(SPEED)
-        self.demo_speed_slider.setStyleSheet("""
-            QSlider::groove:vertical { border:1px solid #414868; width:8px; background:#1a1b26; border-radius:4px; }
-            QSlider::handle:vertical { background:#7dcfff; height:16px; margin:-4px 0; border-radius:8px; }
-        """)
-        self.demo_speed_label = QLabel(f"{SPEED}")
-        self.demo_speed_label.setStyleSheet("font-size:14px;font-weight:bold;color:#7dcfff;font-family:monospace;")
-        self.demo_speed_label.setAlignment(Qt.AlignCenter)
-        spd_layout.addWidget(self.demo_speed_slider, alignment=Qt.AlignHCenter)
-        spd_layout.addWidget(self.demo_speed_label)
-        self.demo_speed_slider.valueChanged.connect(self._on_demo_speed_changed)
-        cl.addWidget(spd_group)
-
         # 모터 바 (커스텀 위젯, -100~+100, 중앙 기준 위아래)
         mg = QGroupBox("MOTOR")
         ml2 = QHBoxLayout(mg)
@@ -714,7 +696,7 @@ class BalancingBotGUI(QMainWindow):
         dl.addLayout(left_panel, stretch=1)
 
         # ── 오른쪽: 그래프 3개 세로 ──
-        def make_demo_plot(title, ylabel, color):
+        def make_demo_plot(title, ylabel, color, legend_name=None):
             w = pg.PlotWidget()
             w.setTitle(title, color="#333333", size="10pt", bold=True)
             w.enableAutoRange(axis='y')
@@ -726,18 +708,20 @@ class BalancingBotGUI(QMainWindow):
             w.getAxis('left').setLabel(ylabel, color='#666666')
             w.addItem(pg.InfiniteLine(angle=0, movable=False,
                 pen=pg.mkPen(color='#EF4444', width=1, style=Qt.DashLine)))
+            if legend_name:
+                w.addLegend(offset=(10, 10))
             data = [0] * 200
             line = w.plot(list(range(200)), data,
-                pen=pg.mkPen(color=color, width=2), antialias=True)
+                pen=pg.mkPen(color=color, width=2), name=legend_name, antialias=True)
             return w, data, line
 
         graphs_layout = QVBoxLayout()
         self.demo_angle_widget, self.demo_angle_data, self.demo_angle_line = \
-            make_demo_plot("Angle", "deg", "#ff922b")
+            make_demo_plot("Angle", "deg", "#ff922b", "Angle")
         self.demo_pid_widget, self.demo_pid_data, self.demo_pid_line = \
-            make_demo_plot("PID Output", "%", "#f06595")
+            make_demo_plot("PID Output", "%", "#f06595", "PID Output")
         self.demo_rate_widget, self.demo_rate_data, self.demo_rate_line = \
-            make_demo_plot("Gyro Rate", "deg/s", "#ffd43b")
+            make_demo_plot("Gyro Rate", "deg/s", "#ffd43b", "Gyro Rate")
 
         graphs_layout.addWidget(self.demo_angle_widget)
         graphs_layout.addWidget(self.demo_pid_widget)
@@ -833,6 +817,28 @@ class BalancingBotGUI(QMainWindow):
         """)
         btn_reset.clicked.connect(self._reset_pid)
         pid_layout.addWidget(btn_reset)
+
+        # ── 왼쪽 하단: 상보필터 α 튜닝 ──
+        alpha_group = QGroupBox("COMPLEMENTARY FILTER")
+        alpha_layout = QVBoxLayout(alpha_group)
+        alpha_layout.setSpacing(15)
+
+        vl_a, self.slider_alpha, self.spin_alpha, _ = make_pid_slider(
+            "Alpha", "#20c997", self._pid_saved[3], 0.99, 0.01)
+        self.spin_alpha.valueChanged.connect(self._on_alpha_changed)
+        alpha_layout.addLayout(vl_a)
+        btn_alpha_reset = QPushButton("RESET (0.98)")
+        btn_alpha_reset.setStyleSheet("""
+            QPushButton {
+                background-color: #f7768e; color: #1a1b26; font-weight: 900;
+                font-size: 13px; padding: 10px; border-radius: 8px;
+            }
+            QPushButton:pressed { background-color: #db4b4b; }
+        """)
+        btn_alpha_reset.clicked.connect(lambda: self.spin_alpha.setValue(0.98))
+        alpha_layout.addWidget(btn_alpha_reset)
+
+        pid_layout.addWidget(alpha_group)
         pid_layout.addStretch()
 
         dl.addWidget(pid_group, stretch=1)
@@ -850,25 +856,43 @@ class BalancingBotGUI(QMainWindow):
             w.getAxis('left').setLabel(ylabel, color='#666666')
             w.addItem(pg.InfiniteLine(angle=0, movable=False,
                 pen=pg.mkPen(color='#EF4444', width=1, style=Qt.DashLine)))
-            data = [0] * 200
-            line = w.plot(list(range(200)), data,
-                pen=pg.mkPen(color=color, width=2), antialias=True)
-            return w, data, line
+            return w
 
         graphs_layout = QVBoxLayout()
 
-        self.dbg_angle_widget, self.dbg_angle_data, self.dbg_angle_line = \
-            make_plot("Angle", "deg", "#ff922b")
-        self.dbg_pid_widget, self.dbg_pid_data, self.dbg_pid_line = \
-            make_plot("PID Output", "%", "#f06595")
-        self.dbg_rate_widget, self.dbg_rate_data, self.dbg_rate_line = \
-            make_plot("Gyro Rate", "deg/s", "#ffd43b")
+        # 필터 전/후 겹친 그래프
+        self.dbg_filter_widget = make_plot("Complementary Filter", "deg", "#ff922b")
+        self.dbg_filter_widget.addLegend(offset=(10, 10))
+        self.dbg_accel_data = [0] * 200
+        self.dbg_angle_data = [0] * 200
+        self.dbg_accel_line = self.dbg_filter_widget.plot(list(range(200)), self.dbg_accel_data,
+            pen=pg.mkPen(color='#ff6b6b', width=1.5), name='Accel (raw)', antialias=True)
+        self.dbg_angle_line = self.dbg_filter_widget.plot(list(range(200)), self.dbg_angle_data,
+            pen=pg.mkPen(color='#51cf66', width=2), name='Filtered', antialias=True)
 
-        graphs_layout.addWidget(self.dbg_angle_widget)
+        # PID Output 그래프
+        self.dbg_pid_widget = make_plot("PID Output", "%", "#f06595")
+        self.dbg_pid_widget.addLegend(offset=(10, 10))
+        self.dbg_pid_data = [0] * 200
+        self.dbg_pid_line = self.dbg_pid_widget.plot(list(range(200)), self.dbg_pid_data,
+            pen=pg.mkPen(color='#f06595', width=2), name='PID Output', antialias=True)
+
+        # Gyro Rate 그래프
+        self.dbg_rate_widget = make_plot("Gyro Rate", "deg/s", "#ffd43b")
+        self.dbg_rate_widget.addLegend(offset=(10, 10))
+        self.dbg_rate_data = [0] * 200
+        self.dbg_rate_line = self.dbg_rate_widget.plot(list(range(200)), self.dbg_rate_data,
+            pen=pg.mkPen(color='#ffd43b', width=2), name='Gyro Rate', antialias=True)
+
+        graphs_layout.addWidget(self.dbg_filter_widget)
         graphs_layout.addWidget(self.dbg_pid_widget)
         graphs_layout.addWidget(self.dbg_rate_widget)
 
         dl.addLayout(graphs_layout, stretch=3)
+
+    def _on_alpha_changed(self, value):
+        self.ser.send_set_alpha(value)
+        self._save_pid_settings()
 
     def _on_pid_value_changed(self, pid_type, value):
         self.ser.send_set_pid(pid_type, value)
@@ -884,9 +908,9 @@ class BalancingBotGUI(QMainWindow):
             import json
             with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'r') as f:
                 d = json.load(f)
-                return [d.get('P', 8.0), d.get('I', 0.1), d.get('D', 0.6)]
+                return [d.get('P', 8.0), d.get('I', 0.1), d.get('D', 0.6), d.get('alpha', 0.98)]
         except Exception:
-            return [8.0, 0.1, 0.6]
+            return [8.0, 0.1, 0.6, 0.98]
 
     def _save_pid_settings(self):
         import json
@@ -894,6 +918,7 @@ class BalancingBotGUI(QMainWindow):
             'P': self.spin_p.value(),
             'I': self.spin_i.value(),
             'D': self.spin_d.value(),
+            'alpha': self.spin_alpha.value(),
         }
         try:
             with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'w') as f:
@@ -921,10 +946,7 @@ class BalancingBotGUI(QMainWindow):
                 "QPushButton:pressed { background-color:#db4b4b; }")
             self.btn_mode.setText("STOP [R]")
 
-    def _on_demo_speed_changed(self, val):
-        global SPEED
-        SPEED = val
-        self.demo_speed_label.setText(str(val))
+
 
     def _set_move(self, fwd, turn):
         if fwd is not None:
@@ -1020,7 +1042,9 @@ class BalancingBotGUI(QMainWindow):
         mode_str = "RUN" if getattr(self, 'is_running', False) else "STOP"
         self.lbl_mode.setText(f"Mode:  {mode_str}")
 
-        # 디버깅탭 그래프
+        # Settings탭 그래프
+        self.dbg_accel_data = self.dbg_accel_data[1:] + [t.accel_angle]
+        self.dbg_accel_line.setData(list(range(200)), self.dbg_accel_data)
         self.dbg_angle_data = self.dbg_angle_data[1:] + [t.angle]
         self.dbg_angle_line.setData(list(range(200)), self.dbg_angle_data)
         self.dbg_pid_data = self.dbg_pid_data[1:] + [t.pid_output]

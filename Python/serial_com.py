@@ -13,7 +13,8 @@ PROTO_MAX_PAYLOAD = 32
 # PC -> STM32 Commands
 CMD_ROBOT_MOVE     = 0x40
 CMD_ROBOT_SET_PID  = 0x41
-CMD_ROBOT_SET_MODE = 0x42
+CMD_ROBOT_SET_MODE  = 0x42
+CMD_ROBOT_SET_ALPHA = 0x43
 
 # STM32 -> PC Responses
 CMD_ACK             = 0x82
@@ -37,6 +38,7 @@ class TelemetryData:
         self.left_cmd = 0
         self.right_cmd = 0
         self.gyro_z = 0.0
+        self.accel_angle = 0.0
 
     def parse(self, payload):
         if len(payload) < 10:
@@ -48,6 +50,8 @@ class TelemetryData:
         self.right_cmd  = struct.unpack('>h', bytes(payload[8:10]))[0]
         if len(payload) >= 12:
             self.gyro_z = struct.unpack('>h', bytes(payload[10:12]))[0] / 10.0
+        if len(payload) >= 14:
+            self.accel_angle = struct.unpack('>h', bytes(payload[12:14]))[0] / 10.0
         return True
 
 
@@ -126,6 +130,12 @@ class SerialCom:
 
     def send_set_mode(self, mode):
         self._send(self._build_packet(CMD_ROBOT_SET_MODE, [mode]))
+
+    def send_set_alpha(self, alpha):
+        raw = int(alpha * 100)
+        hi = (raw >> 8) & 0xFF
+        lo = raw & 0xFF
+        self._send(self._build_packet(CMD_ROBOT_SET_ALPHA, [hi, lo]))
 
     # ── 수신 ──
 

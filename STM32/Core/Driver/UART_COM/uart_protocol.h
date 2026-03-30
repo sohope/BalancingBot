@@ -45,6 +45,7 @@
 #define CMD_ROBOT_MOVE      0x40
 #define CMD_ROBOT_SET_PID   0x41
 #define CMD_ROBOT_SET_MODE  0x42
+#define CMD_ROBOT_SET_ALPHA 0x43
 #define CMD_ROBOT_MAX       0x4F
 
 

@@ -7,6 +7,7 @@
 
 #include "robot_svc.h"
 #include "../PID_SVC/PID_svc.h"
+#include "../Gyro_imu_svc/gyro_imu_svc.h"
 
 // Robot State Variables
 uint8_t g_robot_mode = 0;   // 0: Stop, 1: Balance
@@ -82,6 +83,21 @@ void ROBOT_HandleCmd(Packet_t* pkt) {
                 pid_svc_set_gain(type, value);
             }
             buf[0] = CMD_ROBOT_SET_PID;
+            UART_COM_SendPacket(CMD_ACK, buf, 1);
+            break;
+
+        case CMD_ROBOT_SET_ALPHA:
+            if (pkt->len < 2) {
+                err = ERR_INVALID_LEN;
+                UART_COM_SendPacket(CMD_ERROR, &err, 1);
+                break;
+            }
+            {
+                int16_t raw_val = (int16_t)((pkt->payload[0] << 8) | pkt->payload[1]);
+                float alpha = (float)raw_val / 100.0f;
+                GyroImuSvc_SetAlpha(alpha);
+            }
+            buf[0] = CMD_ROBOT_SET_ALPHA;
             UART_COM_SendPacket(CMD_ACK, buf, 1);
             break;
 

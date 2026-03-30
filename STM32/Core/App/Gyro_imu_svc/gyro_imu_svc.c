@@ -5,14 +5,15 @@
 #include <string.h>
 #include <math.h>
 
-#define COMP_FILTER_ALPHA  0.98f
 #define DEG_PER_RAD        (180.0f / (float)M_PI)
 #define DT                 (READ_INTERVAL_MS / 1000.0f)
 #define TELEMETRY_INTERVAL_MS  100
 
 static uint8_t initialized_flag = 0;
 static float s_angle = 0.0f;
+static float s_accel_angle = 0.0f;
 static float s_gyro_rate = 0.0f;
+static float s_comp_alpha = 0.98f;
 
 void GyroImuSvc_Init(I2C_HandleTypeDef *hi2c)
 {
@@ -43,9 +44,9 @@ void GyroImuSvc_Execute(void)
 	float az = (float)raw.accel_z / ACCEL_SCALE;
 	float gx = (float)raw.gyro_x / GYRO_SCALE;
 
-	float accel_angle = atan2f(ay, az) * DEG_PER_RAD;
+	s_accel_angle = atan2f(ay, az) * DEG_PER_RAD;
 	s_gyro_rate = gx;
-	s_angle = COMP_FILTER_ALPHA * (s_angle + gx * DT) + (1.0f - COMP_FILTER_ALPHA) * accel_angle;
+	s_angle = s_comp_alpha * (s_angle + gx * DT) + (1.0f - s_comp_alpha) * s_accel_angle;
 
 	// 텔레메트리 패킷 전송 (UART6)
 	static uint32_t lastTelemetry = 0;
@@ -54,14 +55,15 @@ void GyroImuSvc_Execute(void)
 
 		extern PID_Controller bal_pid;
 		float gz = (float)raw.gyro_z / GYRO_SCALE;
-		int16_t angle_i     = (int16_t)(s_angle * 10.0f);
-		int16_t rate_i      = (int16_t)(s_gyro_rate * 10.0f);
-		int16_t pid_out_i   = (int16_t)(bal_pid.balance_output * 10.0f);
-		int16_t left_cmd_i  = DC_Motor_GetLeftCmd();
-		int16_t right_cmd_i = DC_Motor_GetRightCmd();
-		int16_t gz_i        = (int16_t)(gz * 10.0f);
+		int16_t angle_i      = (int16_t)(s_angle * 10.0f);
+		int16_t rate_i       = (int16_t)(s_gyro_rate * 10.0f);
+		int16_t pid_out_i    = (int16_t)(bal_pid.balance_output * 10.0f);
+		int16_t left_cmd_i   = DC_Motor_GetLeftCmd();
+		int16_t right_cmd_i  = DC_Motor_GetRightCmd();
+		int16_t gz_i         = (int16_t)(gz * 10.0f);
+		int16_t accel_ang_i  = (int16_t)(s_accel_angle * 10.0f);
 
-		uint8_t payload[12];
+		uint8_t payload[14];
 		payload[0]  = (uint8_t)(angle_i >> 8);
 		payload[1]  = (uint8_t)(angle_i & 0xFF);
 		payload[2]  = (uint8_t)(rate_i >> 8);
@@ -74,8 +76,10 @@ void GyroImuSvc_Execute(void)
 		payload[9]  = (uint8_t)(right_cmd_i & 0xFF);
 		payload[10] = (uint8_t)(gz_i >> 8);
 		payload[11] = (uint8_t)(gz_i & 0xFF);
+		payload[12] = (uint8_t)(accel_ang_i >> 8);
+		payload[13] = (uint8_t)(accel_ang_i & 0xFF);
 
-		UART_COM_SendPacket(CMD_ROBOT_TELEMETRY, payload, 12);
+		UART_COM_SendPacket(CMD_ROBOT_TELEMETRY, payload, 14);
 	}
 }
 
@@ -87,4 +91,11 @@ float GyroImuSvc_GetAngle(void)
 float GyroImuSvc_GetRate(void)
 {
 	return s_gyro_rate;
+}
+
+void GyroImuSvc_SetAlpha(float alpha)
+{
+	if (alpha < 0.5f) alpha = 0.5f;
+	if (alpha > 0.99f) alpha = 0.99f;
+	s_comp_alpha = alpha;
 }
