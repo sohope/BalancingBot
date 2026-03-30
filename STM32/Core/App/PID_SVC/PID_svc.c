@@ -8,13 +8,15 @@
 // ==========================================
 // 1. 설정값
 // ==========================================
-#define MOVE_ANGLE_GAIN   (-0.15f)  // 앞으로 기울임 = 음수 angle이므로 부호 반전
-#define TURN_GAIN         0.3f    // turn 100 → 좌우 차이 30
+#define MOVE_ANGLE_GAIN   (-0.05f)  // speed 100 → 최대 5도 기울기
+#define TURN_GAIN         0.3f     // turn 100 → 좌우 차이 30
+#define RAMP_RATE         0.5f     // target_angle 초당 변화 최대 (도/루프)
 
 // ==========================================
 // 2. 전역 변수
 // ==========================================
 PID_Controller bal_pid;
+static float s_ramped_angle = 0.0f;
 
 // ==========================================
 // 3. PID 계산
@@ -51,8 +53,16 @@ void pid_svc_exe(void) {
 	bal_pid.current_angle = GyroImuSvc_GetAngle();
 	bal_pid.current_rate = GyroImuSvc_GetRate();
 
-	// 이동 명령 → target_angle 변경 (기울여서 이동)
-	bal_pid.target_angle = (float)g_target_speed * MOVE_ANGLE_GAIN;
+	// 이동 명령 → target_angle 서서히 변경 (ramping)
+	float desired_angle = (float)g_target_speed * MOVE_ANGLE_GAIN;
+	if (s_ramped_angle < desired_angle) {
+		s_ramped_angle += RAMP_RATE;
+		if (s_ramped_angle > desired_angle) s_ramped_angle = desired_angle;
+	} else if (s_ramped_angle > desired_angle) {
+		s_ramped_angle -= RAMP_RATE;
+		if (s_ramped_angle < desired_angle) s_ramped_angle = desired_angle;
+	}
+	bal_pid.target_angle = s_ramped_angle;
 
 	// PID 계산
 	PID_Compute_Internal();

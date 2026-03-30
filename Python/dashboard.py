@@ -647,7 +647,7 @@ class BalancingBotGUI(QMainWindow):
         pid_layout.addLayout(vl_p)
         pid_layout.addLayout(vl_i)
         pid_layout.addLayout(vl_d)
-        btn_reset = QPushButton("RESET (P=10  I=0.24  D=0.58)")
+        btn_reset = QPushButton("RESET (P=8  I=0.1  D=0.6)")
         btn_reset.setStyleSheet("""
             QPushButton {
                 background-color: #f7768e; color: #1a1b26; font-weight: 900;
@@ -699,18 +699,18 @@ class BalancingBotGUI(QMainWindow):
         self._save_pid_settings()
 
     def _reset_pid(self):
-        self.spin_p.setValue(10.0)
-        self.spin_i.setValue(0.24)
-        self.spin_d.setValue(0.58)
+        self.spin_p.setValue(8.0)
+        self.spin_i.setValue(0.1)
+        self.spin_d.setValue(0.6)
 
     def _load_pid_settings(self):
         try:
             import json
             with open(os.path.join(os.path.dirname(__file__), 'pid_settings.json'), 'r') as f:
                 d = json.load(f)
-                return [d.get('P', 10.0), d.get('I', 0.24), d.get('D', 0.58)]
+                return [d.get('P', 8.0), d.get('I', 0.1), d.get('D', 0.6)]
         except Exception:
-            return [10.0, 0.24, 0.58]
+            return [8.0, 0.1, 0.6]
 
     def _save_pid_settings(self):
         import json
