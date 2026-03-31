@@ -15,22 +15,13 @@ int8_t g_target_speed = 0;  // -100 ~ 100 (Forward/Backward)
 int8_t g_target_turn = 0;   // -100 ~ 100 (Left/Right)
 
 void Robot_Init(void) {
-    // TODO: Initialize motors and sensors
-    // Motor_Init(&htim);
+
 }
 
 void Robot_Execute(void) {
     if (UART_COM_ROBOT_isRxReady()) {
         ROBOT_HandleCmd(UART_COM_ROBOT_GetPacket());
     }
-
-    // TODO: Telemetry transmission logic (e.g., 10ms tick)
-    /*
-    if (telemetry_tick_flag) {
-        telemetry_tick_flag = 0;
-        Robot_SendTelemetry();
-    }
-    */
 }
 
 void ROBOT_HandleCmd(Packet_t* pkt) {

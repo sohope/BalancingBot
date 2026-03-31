@@ -9,7 +9,7 @@
 #define DRIVER_UART_COM_UART_COM_H_
 
 #include "stm32f4xx_hal.h"
-#include "uart_protocol.h" // Packet_t 구조체가 정의되어 있을 것으로 예상됨
+#include "uart_protocol.h"
 
 #define UART_RX_DMA_BUF_SIZE 64
 
