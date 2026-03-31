@@ -716,8 +716,12 @@ class BalancingBotGUI(QMainWindow):
             return w, data, line
 
         graphs_layout = QVBoxLayout()
+        # Angle: 필터 전/후 겹침
         self.demo_angle_widget, self.demo_angle_data, self.demo_angle_line = \
-            make_demo_plot("Angle", "deg", "#ff922b", "Angle")
+            make_demo_plot("Angle", "deg", "#51cf66", "Filtered")
+        self.demo_accel_data = [0] * 200
+        self.demo_accel_line = self.demo_angle_widget.plot(list(range(200)), self.demo_accel_data,
+            pen=pg.mkPen(color='#ff6b6b', width=1.5), name='Accel (raw)', antialias=True)
         self.demo_pid_widget, self.demo_pid_data, self.demo_pid_line = \
             make_demo_plot("PID Output", "%", "#f06595", "PID Output")
         self.demo_rate_widget, self.demo_rate_data, self.demo_rate_line = \
@@ -1021,6 +1025,8 @@ class BalancingBotGUI(QMainWindow):
             self.radar_widget.setYaw(self.robot_avatar.yaw)
 
         # 데모탭 그래프
+        self.demo_accel_data = self.demo_accel_data[1:] + [t.accel_angle]
+        self.demo_accel_line.setData(list(range(200)), self.demo_accel_data)
         self.demo_angle_data = self.demo_angle_data[1:] + [t.angle]
         self.demo_angle_line.setData(list(range(200)), self.demo_angle_data)
         self.demo_pid_data = self.demo_pid_data[1:] + [t.pid_output]
